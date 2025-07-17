@@ -16,6 +16,9 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
     init(statusItem: NSStatusItem) {
         self.statusItem = statusItem
         super.init()
+        
+        NSLog("🚀 MenuBarController initialized")
+        
         setupStatusItem()
         updateIcon()
         
@@ -24,6 +27,8 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
         
         webSocketService = WebSocketService()
         webSocketService.delegate = self
+        
+        NSLog("✅ All services initialized")
     }
     
     private func setupStatusItem() {
@@ -33,8 +38,10 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
     }
     
     private func updateIcon() {
-        if let button = statusItem.button {
-            button.alphaValue = isOakOSConnected ? 1.0 : 0.5
+        DispatchQueue.main.async { [weak self] in
+            if let button = self?.statusItem.button {
+                button.alphaValue = self?.isOakOSConnected == true ? 1.0 : 0.5
+            }
         }
     }
     
@@ -426,6 +433,48 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
     // MARK: - BonjourServiceDelegate
     func oakOSFound(name: String, host: String, port: Int) {
         print("🎵 oakOS détecté: \(name) à \(host):\(port)")
+        
+        // Éviter les connexions multiples
+        if isOakOSConnected {
+            print("⚠️ oakOS déjà connecté, ignoré")
+            return
+        }
+        
+        // Attendre que le service soit vraiment prêt avant de se connecter
+        waitForServiceReady(name: name, host: host, port: port)
+    }
+    
+    private func waitForServiceReady(name: String, host: String, port: Int, attempt: Int = 1) {
+        let maxAttempts = 10
+        
+        let apiService = OakOSAPIService(host: host, port: port)
+        
+        Task {
+            do {
+                // Test simple de connectivité
+                _ = try await apiService.fetchState()
+                
+                // Le service répond, on peut se connecter
+                await MainActor.run {
+                    self.connectToOakOS(name: name, host: host, port: port)
+                }
+                
+            } catch {
+                // Le service n'est pas encore prêt
+                if attempt < maxAttempts {
+                    await MainActor.run {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                            self.waitForServiceReady(name: name, host: host, port: port, attempt: attempt + 1)
+                        }
+                    }
+                } else {
+                    NSLog("❌ Service non accessible après \(maxAttempts) tentatives")
+                }
+            }
+        }
+    }
+    
+    private func connectToOakOS(name: String, host: String, port: Int) {
         isOakOSConnected = true
         updateIcon()
         
@@ -442,6 +491,13 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
     
     func oakOSLost() {
         print("❌ oakOS perdu")
+        
+        // Éviter les déconnexions multiples
+        if !isOakOSConnected {
+            print("⚠️ oakOS déjà déconnecté, ignoré")
+            return
+        }
+        
         isOakOSConnected = false
         updateIcon()
         apiService = nil
@@ -450,6 +506,11 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
         
         // Déconnecter le WebSocket
         webSocketService.disconnect()
+        
+        // Mettre à jour le menu s'il est ouvert
+        if let menu = activeMenu {
+            updateMenuInRealTime(menu)
+        }
     }
 }
 

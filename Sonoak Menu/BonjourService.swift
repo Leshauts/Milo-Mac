@@ -4,18 +4,24 @@ import Network
 class BonjourService: NSObject, ObservableObject {
     private var browser: NWBrowser?
     private var isSearching = false
+    private var oakOSServiceName: String?
     
     weak var delegate: BonjourServiceDelegate?
     
     override init() {
         super.init()
+        NSLog("🔍 BonjourService initializing...")
         startBrowsing()
     }
     
     private func startBrowsing() {
-        guard !isSearching else { return }
+        guard !isSearching else {
+            NSLog("⚠️ Already searching, skipping")
+            return
+        }
         
-        // Chercher les services HTTP avec le nom "oakos"
+        NSLog("🔍 Starting Bonjour browser...")
+        
         let parameters = NWParameters()
         parameters.includePeerToPeer = false
         
@@ -24,30 +30,53 @@ class BonjourService: NSObject, ObservableObject {
         browser?.stateUpdateHandler = { [weak self] state in
             switch state {
             case .ready:
-                print("🔍 Bonjour browser ready")
+                NSLog("✅ Bonjour browser ready")
                 self?.isSearching = true
             case .failed(let error):
-                print("❌ Bonjour browser failed: \(error)")
+                NSLog("❌ Bonjour browser failed: \(error)")
+                self?.isSearching = false
+                // Redémarrer après un délai
+                DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) {
+                    self?.startBrowsing()
+                }
+            case .cancelled:
+                NSLog("🛑 Bonjour browser cancelled")
                 self?.isSearching = false
             default:
+                NSLog("🤷 Bonjour browser state: \(state)")
                 break
             }
         }
         
         browser?.browseResultsChangedHandler = { [weak self] results, changes in
-            print("🔍 Services trouvés: \(results.count)")
+            print("🔍 Browse results changed - Total: \(results.count)")
             
-            for result in results {
-                if case let .service(name, _, _, _) = result.endpoint {
-                    print("📡 Service détecté: \(name)")
+            // Traiter uniquement les changements
+            for change in changes {
+                switch change {
+                case .added(let result):
+                    self?.handleServiceAdded(result)
                     
-                    // Chercher "oakos" de manière plus flexible
-                    if name.lowercased().contains("oakos") ||
-                       name.lowercased().contains("sonoak") ||
-                       name.lowercased().contains("oak") {
-                        print("✅ Found oakOS service: \(name)")
-                        self?.resolveService(result)
+                case .removed(let result):
+                    self?.handleServiceRemoved(result)
+                    
+                case .changed(_, let new, _):
+                    print("📝 Service changed: \(new)")
+                    
+                    // Vérifier si c'est un service oakOS qui revient
+                    if case let .service(name, _, _, _) = new.endpoint {
+                        if self?.isOakOSService(name) == true && self?.oakOSServiceName == nil {
+                            print("🔄 oakOS service reconnected via changed event: \(name)")
+                            self?.oakOSServiceName = name
+                            self?.resolveAndConnect(new)
+                        }
                     }
+                    
+                case .identical:
+                    print("📋 Service identical - no action needed")
+                    
+                @unknown default:
+                    print("🤷 Unknown browse result change")
                 }
             }
         }
@@ -55,42 +84,83 @@ class BonjourService: NSObject, ObservableObject {
         browser?.start(queue: .main)
     }
     
-    private func resolveService(_ result: NWBrowser.Result) {
-        let connection = NWConnection(to: result.endpoint, using: .tcp)
-        
-        connection.stateUpdateHandler = { [weak self] state in
-            switch state {
-            case .ready:
-                if case let .service(name, _, _, _) = result.endpoint {
-                    // Essayer d'extraire l'IP de manière plus directe
-                    let endpointDescription = "\(result.endpoint)"
-                    print("🔍 Endpoint brut: \(endpointDescription)")
-                    
-                    // Pour l'instant, utiliser l'IP connue comme fallback
-                    print("🌐 Utilisation de l'IP de fallback")
-                    self?.delegate?.oakOSFound(name: name, host: "192.168.1.152", port: 8000)
+    private func handleServiceAdded(_ result: NWBrowser.Result) {
+        if case let .service(name, _, _, _) = result.endpoint {
+            NSLog("➕ Service detected: \(name)")
+            
+            // Chercher oakOS dans le nom du service
+            if isOakOSService(name) {
+                NSLog("✅ oakOS service found: \(name)")
+                
+                // Toujours connecter si on n'a pas de service actuel
+                if oakOSServiceName == nil {
+                    NSLog("🔄 Connecting to oakOS service: \(name)")
+                    oakOSServiceName = name
+                    resolveAndConnect(result)
+                } else {
+                    NSLog("⚠️ oakOS service already connected: \(oakOSServiceName!)")
                 }
-                connection.cancel()
-            case .failed(let error):
-                print("❌ Résolution échouée: \(error)")
-                // Fallback vers IP connue
-                if case let .service(name, _, _, _) = result.endpoint {
-                    print("🔄 Fallback vers IP connue")
-                    self?.delegate?.oakOSFound(name: name, host: "192.168.1.152", port: 8000)
-                }
-                connection.cancel()
-            default:
-                break
             }
         }
+    }
+    
+    private func handleServiceRemoved(_ result: NWBrowser.Result) {
+        if case let .service(name, _, _, _) = result.endpoint {
+            NSLog("➖ Service removed: \(name)")
+            
+            // Vérifier si c'est notre service oakOS qui a disparu
+            if let currentService = oakOSServiceName, currentService == name {
+                NSLog("❌ Our oakOS service disappeared: \(name)")
+                oakOSServiceName = nil
+                delegate?.oakOSLost()
+            }
+        }
+    }
+    
+    private func isOakOSService(_ name: String) -> Bool {
+        let nameLower = name.lowercased()
+        return nameLower.contains("oakos") ||
+               nameLower.contains("oak") ||
+               nameLower.contains("sonoak")
+    }
+    
+    private func resolveAndConnect(_ result: NWBrowser.Result) {
+        if case let .service(name, _, _, _) = result.endpoint {
+            NSLog("🌐 Service resolved: \(name)")
+            
+            // Utiliser directement l'IP connue et le port 8000
+            // La résolution Bonjour a des problèmes avec les ports
+            NSLog("🔄 Using fallback IP and port")
+            delegate?.oakOSFound(name: name, host: "192.168.1.188", port: 8000)
+        }
+    }
+    
+    private func extractHostFromEndpoint(_ endpoint: NWEndpoint) -> (host: String, port: Int)? {
+        let description = "\(endpoint)"
         
-        connection.start(queue: .main)
+        // Pattern pour extraire IP:port
+        let ipPattern = #"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):(\d+)"#
+        
+        if let regex = try? NSRegularExpression(pattern: ipPattern),
+           let match = regex.firstMatch(in: description, range: NSRange(description.startIndex..., in: description)) {
+            
+            let ipRange = Range(match.range(at: 1), in: description)!
+            let portRange = Range(match.range(at: 2), in: description)!
+            
+            let host = String(description[ipRange])
+            let port = Int(String(description[portRange])) ?? 8000
+            
+            return (host: host, port: port)
+        }
+        
+        return nil
     }
     
     func stopBrowsing() {
         browser?.cancel()
         browser = nil
         isSearching = false
+        oakOSServiceName = nil
     }
     
     deinit {

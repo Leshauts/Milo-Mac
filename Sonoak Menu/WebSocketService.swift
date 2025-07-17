@@ -22,6 +22,12 @@ class WebSocketService: NSObject {
     private var host: String?
     private var port: Int = 8000
     
+    // Ping/Pong pour détecter les connexions mortes
+    private var pingTimer: Timer?
+    private var lastPongReceived = Date()
+    private let pingInterval: TimeInterval = 30.0
+    private let pongTimeout: TimeInterval = 10.0
+    
     override init() {
         super.init()
         setupURLSession()
@@ -57,6 +63,9 @@ class WebSocketService: NSObject {
         webSocketTask = urlSession?.webSocketTask(with: url)
         webSocketTask?.resume()
         
+        // Reset le timestamp de dernier pong
+        lastPongReceived = Date()
+        
         startListening()
     }
     
@@ -76,6 +85,9 @@ class WebSocketService: NSObject {
     }
     
     private func handleMessage(_ message: URLSessionWebSocketTask.Message) {
+        // Mettre à jour le timestamp de dernier message reçu
+        lastPongReceived = Date()
+        
         switch message {
         case .string(let text):
             parseMessage(text)
@@ -159,10 +171,44 @@ class WebSocketService: NSObject {
         delegate?.didReceiveVolumeUpdate(volumeStatus)
     }
     
+    private func startPingTimer() {
+        stopPingTimer()
+        
+        pingTimer = Timer.scheduledTimer(withTimeInterval: pingInterval, repeats: true) { [weak self] _ in
+            self?.sendPing()
+        }
+    }
+    
+    private func stopPingTimer() {
+        pingTimer?.invalidate()
+        pingTimer = nil
+    }
+    
+    private func sendPing() {
+        guard let webSocketTask = webSocketTask else { return }
+        
+        webSocketTask.sendPing { [weak self] error in
+            if let error = error {
+                print("❌ Ping failed: \(error)")
+                self?.handleDisconnection()
+            } else {
+                // Vérifier si on a reçu un pong récemment
+                let now = Date()
+                if let lastPong = self?.lastPongReceived,
+                   now.timeIntervalSince(lastPong) > self?.pongTimeout ?? 10.0 {
+                    print("💔 Pong timeout - connexion considérée morte")
+                    self?.handleDisconnection()
+                }
+            }
+        }
+    }
+    
     func disconnect() {
         shouldReconnect = false
         reconnectTimer?.invalidate()
         reconnectTimer = nil
+        
+        stopPingTimer()
         
         webSocketTask?.cancel(with: .goingAway, reason: nil)
         webSocketTask = nil
@@ -174,6 +220,8 @@ class WebSocketService: NSObject {
     }
     
     private func handleDisconnection() {
+        stopPingTimer()
+        
         if isConnected {
             isConnected = false
             DispatchQueue.main.async { [weak self] in
@@ -201,6 +249,7 @@ class WebSocketService: NSObject {
     }
     
     deinit {
+        stopPingTimer()
         disconnect()
     }
 }
@@ -211,6 +260,9 @@ extension WebSocketService: URLSessionWebSocketDelegate {
         print("✅ WebSocket connected")
         isConnected = true
         reconnectAttempts = 0
+        
+        // Démarrer le ping timer
+        startPingTimer()
         
         DispatchQueue.main.async { [weak self] in
             self?.delegate?.webSocketDidConnect()

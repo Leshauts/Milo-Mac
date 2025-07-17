@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		B39E9F462E28EF9600CDCA62 /* .gitignore in Resources */ = {isa = PBXBuildFile; fileRef = B39E9F442E28EF8F00CDCA62 /* .gitignore */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		B3A7E0642E216D2500785117 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -24,6 +28,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		B39E9F442E28EF8F00CDCA62 /* .gitignore */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitignore; sourceTree = "<group>"; };
 		B3A7E0552E216D2400785117 /* Sonoak Menu.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Sonoak Menu.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		B3A7E0632E216D2500785117 /* Sonoak MenuTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Sonoak MenuTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		B3A7E06D2E216D2500785117 /* Sonoak MenuUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Sonoak MenuUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -79,6 +84,7 @@
 				B3A7E0662E216D2500785117 /* Sonoak MenuTests */,
 				B3A7E0702E216D2500785117 /* Sonoak MenuUITests */,
 				B3A7E0562E216D2400785117 /* Products */,
+				B39E9F442E28EF8F00CDCA62 /* .gitignore */,
 			);
 			sourceTree = "<group>";
 		};
@@ -212,6 +218,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B39E9F462E28EF9600CDCA62 /* .gitignore in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

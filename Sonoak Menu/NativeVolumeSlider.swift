@@ -1,16 +1,34 @@
 import AppKit
 
 class NativeVolumeSlider: NSSlider {
+    // MARK: - Constants
     private let trackHeight: CGFloat = 22
     private let fillHeight: CGFloat = 20
     private let thumbSize: CGFloat = 20
+    private let iconSize: CGFloat = 18
+    private let iconX: CGFloat = 2
+    private let fixedFillStartX: CGFloat = 11.0
     
+    // Transition constants
+    private let transitionStart: CGFloat = 32
+    private let transitionEnd: CGFloat = 16
+    
+    // Opacity constants
+    private let inactiveWaveOpacity: Float = 0.24
+    private let maxStrokeOpacity: Float = 0.12
+    private let maxShadowOpacity: Float = 0.1
+    private let thumbColorVariation: Double = 0.06
+    
+    // Wave activation thresholds
+    private let wave2Threshold: Double = 0.33
+    private let wave3Threshold: Double = 0.66
+    
+    // MARK: - Properties
     private var thumbLayer: CALayer!
     private var fillLayer: CALayer!
     private var trackLayer: CALayer!
     private var iconLayer: CALayer!
     private var isThumbPressed: Bool = false
-    private var thumbPressedColor: NSColor = NSColor.lightGray
     
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -63,7 +81,8 @@ class NativeVolumeSlider: NSSlider {
         fillLayer.backgroundColor = NSColor.white.cgColor
         fillLayer.actions = [
             "bounds": createSmoothAnimation(),
-            "frame": createSmoothAnimation()
+            "frame": createSmoothAnimation(),
+            "position": createSmoothAnimation()
         ]
         mainLayer.addSublayer(fillLayer)
         
@@ -72,6 +91,13 @@ class NativeVolumeSlider: NSSlider {
         thumbLayer.backgroundColor = NSColor.white.cgColor
         thumbLayer.borderWidth = 1.0
         thumbLayer.borderColor = NSColor.black.withAlphaComponent(0.5).cgColor
+        
+        // AJOUT : Shadow très légère sur le thumb
+        thumbLayer.shadowColor = NSColor.black.cgColor
+        thumbLayer.shadowOpacity = 0.1        // Opacité très faible (10%)
+        thumbLayer.shadowOffset = CGSize(width: 0, height: 1)  // Décalage vers le bas
+        thumbLayer.shadowRadius = 2.0        // Rayon de flou
+        
         thumbLayer.actions = [
             "position": createSmoothAnimation(),
             "frame": createSmoothAnimation()
@@ -92,9 +118,9 @@ class NativeVolumeSlider: NSSlider {
     private func addVolumeIcon() {
         guard let mainLayer = layer else { return }
         
-        // Couleur grise native
-        let iconColor = NSColor.systemGray.cgColor
-        
+        // Couleur grise légèrement plus sombre
+        let iconColor = NSColor(white: 0.28, alpha: 1.0).cgColor
+
         // Base du haut-parleur (toujours visible)
         let speakerLayer = CAShapeLayer()
         speakerLayer.fillColor = iconColor
@@ -139,7 +165,7 @@ class NativeVolumeSlider: NSSlider {
         // Onde 1 (la plus proche - première à s'activer)
         let wave1Layer = CAShapeLayer()
         wave1Layer.fillColor = iconColor
-        wave1Layer.opacity = 0.32 // Commence inactif
+        wave1Layer.opacity = inactiveWaveOpacity
         
         let wave1Path = CGMutablePath()
         wave1Path.move(to: CGPoint(x: 10.1074, y: 6.416))
@@ -178,7 +204,7 @@ class NativeVolumeSlider: NSSlider {
         // Onde 2 (intermédiaire)
         let wave2Layer = CAShapeLayer()
         wave2Layer.fillColor = iconColor
-        wave2Layer.opacity = 0.32
+        wave2Layer.opacity = inactiveWaveOpacity
         
         let wave2Path = CGMutablePath()
         wave2Path.move(to: CGPoint(x: 13.5316, y: 9.00002))
@@ -217,7 +243,7 @@ class NativeVolumeSlider: NSSlider {
         // Onde 3 (la plus éloignée - dernière à s'activer)
         let wave3Layer = CAShapeLayer()
         wave3Layer.fillColor = iconColor
-        wave3Layer.opacity = 0.32
+        wave3Layer.opacity = inactiveWaveOpacity
         
         let wave3Path = CGMutablePath()
         wave3Path.move(to: CGPoint(x: 13.4332, y: 3.49807))
@@ -321,8 +347,6 @@ class NativeVolumeSlider: NSSlider {
     
     private func updateVolumeIconPosition(_ iconLayer: CALayer) {
         let trackY = bounds.midY - trackHeight / 2
-        let iconSize: CGFloat = 18
-        let iconX: CGFloat = 2
         let iconY = trackY + 1 + (fillHeight - iconSize) / 2
         
         iconLayer.frame = NSRect(x: iconX, y: iconY, width: iconSize, height: iconSize)
@@ -346,6 +370,7 @@ class NativeVolumeSlider: NSSlider {
         
         trackLayer.frame = NSRect(x: 0, y: trackY, width: bounds.width, height: trackHeight)
         
+        // Garder la position originale du cercle d'icône (ne pas la changer)
         let iconZoneRect = NSRect(x: 1, y: trackY + 1, width: fillHeight, height: fillHeight)
         iconLayer.frame = iconZoneRect
         
@@ -355,17 +380,15 @@ class NativeVolumeSlider: NSSlider {
         thumbLayer.frame = NSRect(x: thumbX, y: thumbY, width: thumbSize, height: thumbSize)
         
         if percentage > 0 {
-            // IMPORTANT : La barre commence au centre du cercle d'icône et va jusqu'au centre du thumb
-            let fillStartX = iconZoneRect.midX // Centre du cercle d'icône
-            let thumbCenterX = thumbX + thumbSize / 2 // Centre du thumb
-            let fillWidth = max(0, thumbCenterX - fillStartX)
-            fillLayer.frame = NSRect(x: fillStartX, y: trackY + 1, width: fillWidth, height: fillHeight)
+            let thumbCenterX = thumbX + thumbSize / 2
+            let fillWidth = max(0, thumbCenterX - fixedFillStartX)
+            fillLayer.frame = NSRect(x: fixedFillStartX, y: trackY + 1, width: fillWidth, height: fillHeight)
+            
+            print("🎯 Volume: \(Int(percentage * 100))% - FillStart: \(fixedFillStartX), Width: \(fillWidth)")
         } else {
-            fillLayer.frame = .zero
+            fillLayer.frame = NSRect(x: fixedFillStartX, y: trackY + 1, width: 0, height: fillHeight)
+            print("🎯 Volume: 0% - Fill masqué")
         }
-        
-        // Supprimer l'ancienne logique de couleur du thumb (maintenant gérée dans updateThumbStrokeOpacity)
-        // thumbLayer.backgroundColor = isThumbPressed ? thumbPressedColor.cgColor : NSColor.white.cgColor
         
         // Gestion de l'opacité du stroke du thumb
         updateThumbStrokeOpacity(thumbX: thumbX, iconZoneRect: iconZoneRect)
@@ -379,59 +402,58 @@ class NativeVolumeSlider: NSSlider {
         let thumbLeftEdge = thumbX
         let distanceFromLeft = thumbLeftEdge
         
-        // Zones ajustées pour plus de blanc sans stroke
-        let strokeTransitionStart: CGFloat = 35 // Commence à réduire le stroke plus loin
-        let strokeInvisibleAt: CGFloat = 25     // Stroke invisible plus loin aussi
+        // CORRECTION : Utiliser les mêmes seuils pour stroke ET couleur ET shadow
+        let transitionStart: CGFloat = 32    // Transition commence à 32px
+        let transitionEnd: CGFloat = 16      // Transition finit à 16px
         
-        // Calculer l'opacité du stroke (progressif)
-        let strokeOpacity: Float
-        if distanceFromLeft >= strokeTransitionStart {
-            strokeOpacity = 0.5 // Stroke normal
-        } else if distanceFromLeft <= strokeInvisibleAt {
-            strokeOpacity = 0.0 // Stroke invisible
+        // Calculer le progress pour les trois propriétés (stroke, couleur, shadow)
+        let progress: CGFloat
+        if distanceFromLeft >= transitionStart {
+            progress = 1.0 // Complètement "loin" du début
+        } else if distanceFromLeft <= transitionEnd {
+            progress = 0.0 // Complètement "proche" du début
         } else {
-            // Transition progressive entre 35px et 25px
-            let progress = (distanceFromLeft - strokeInvisibleAt) / (strokeTransitionStart - strokeInvisibleAt)
-            strokeOpacity = Float(progress * 0.5)
+            // Transition progressive entre 16px et 32px
+            progress = (distanceFromLeft - transitionEnd) / (transitionStart - transitionEnd)
         }
         
-        // Calculer la couleur de drag progressive (#F0F0F0 vers #FFF)
-        let dragColor: NSColor
-        let grayValue: Double // Déclarer ici pour être accessible dans les logs
+        // Calculer l'opacité du stroke avec le même progress
+        let strokeOpacity = Float(progress * 0.12)
         
-        if distanceFromLeft >= strokeTransitionStart {
-            dragColor = thumbPressedColor // #F0F0F0 normal
-            grayValue = 0.94
-        } else if distanceFromLeft <= strokeInvisibleAt {
-            dragColor = NSColor.white // #FFF au début
-            grayValue = 1.0
+        // Calculer l'opacité de la shadow avec le même progress
+        let shadowOpacity = Float(progress * 0.1) // De 0.0 à 0.1
+        
+        // Calculer la couleur du background avec le même progress
+        let dragColor: NSColor
+        if isThumbPressed {
+            // Interpolation entre blanc (progress=0.0) et gris clair (progress=1.0)
+            let grayValue = 1.0 - (progress * 0.06)
+            dragColor = NSColor(white: grayValue, alpha: 1.0)
         } else {
-            // Transition progressive de #F0F0F0 vers #FFF
-            let progress = (distanceFromLeft - strokeInvisibleAt) / (strokeTransitionStart - strokeInvisibleAt)
-            
-            // Interpolation entre #F0F0F0 (0.94) et #FFF (1.0)
-            grayValue = 0.94 + (1.0 - 0.94) * (1.0 - progress) // De 0.94 vers 1.0
-            dragColor = NSColor(red: grayValue, green: grayValue, blue: grayValue, alpha: 1.0)
+            dragColor = NSColor.white // Pas utilisé, mais pour clarté
         }
         
         CATransaction.begin()
         CATransaction.setAnimationDuration(0.1)
         
         if isThumbPressed {
-            // Pendant le drag : couleur progressive + stroke progressif
+            // Pendant le drag : couleur, stroke ET shadow avec le même progress
             thumbLayer.backgroundColor = dragColor.cgColor
             thumbLayer.borderColor = NSColor.black.withAlphaComponent(CGFloat(strokeOpacity)).cgColor
-            print("🖱️ Drag - bord gauche: \(Int(distanceFromLeft))px, stroke: \(strokeOpacity), couleur: \(grayValue)")
-        } else if distanceFromLeft <= strokeInvisibleAt {
-            // Thumb au début (≤25px du bord gauche) : blanc pur, pas de stroke
+            thumbLayer.shadowOpacity = shadowOpacity
+            print("🖱️ Drag - \(Int(distanceFromLeft))px, progress: \(String(format: "%.2f", progress)), stroke: \(strokeOpacity), shadow: \(shadowOpacity)")
+        } else if distanceFromLeft <= transitionEnd {
+            // Thumb au début : blanc pur, pas de stroke, pas de shadow
             thumbLayer.backgroundColor = NSColor.white.cgColor
             thumbLayer.borderColor = NSColor.black.withAlphaComponent(0.0).cgColor
-            print("📍 Début slider - blanc pur sans stroke")
+            thumbLayer.shadowOpacity = 0.0
+            print("📍 Début slider - blanc pur sans stroke ni shadow")
         } else {
-            // Thumb normal : blanc avec stroke selon la distance
+            // Thumb normal : blanc avec stroke et shadow selon la distance
             thumbLayer.backgroundColor = NSColor.white.cgColor
             thumbLayer.borderColor = NSColor.black.withAlphaComponent(CGFloat(strokeOpacity)).cgColor
-            print("✋ Thumb normal - bord: \(Int(distanceFromLeft))px, stroke: \(strokeOpacity)")
+            thumbLayer.shadowOpacity = shadowOpacity
+            print("✋ Thumb normal - \(Int(distanceFromLeft))px, stroke: \(strokeOpacity), shadow: \(shadowOpacity)")
         }
         
         CATransaction.commit()
@@ -455,40 +477,31 @@ class NativeVolumeSlider: NSSlider {
         guard let mainLayer = layer else { return }
         
         let volumePercentage = (doubleValue - minValue) / (maxValue - minValue)
-        print("🎵 Volume: \(Int(volumePercentage * 100))% - Mise à jour des ondes")
+        
+        let isMuted = volumePercentage == 0
+        let wave1Active = volumePercentage > 0
+        let wave2Active = volumePercentage > wave2Threshold
+        let wave3Active = volumePercentage > wave3Threshold
         
         for sublayer in mainLayer.sublayers ?? [] {
             guard let name = sublayer.name else { continue }
             
-            // Animation fluide des opacités
             CATransaction.begin()
             CATransaction.setAnimationDuration(0.2)
             CATransaction.setAnimationTimingFunction(CAMediaTimingFunction(name: .easeInEaseOut))
             
             switch name {
             case "mute":
-                // Croix visible seulement si volume = 0
-                let muteOpacity: Float = volumePercentage == 0 ? 1.0 : 0.0
-                sublayer.opacity = muteOpacity
-                print("  🔇 Mute: \(muteOpacity)")
+                sublayer.opacity = isMuted ? 1.0 : 0.0
                 
             case "wave1":
-                // Première onde active dès qu'il y a du volume (et pas de mute)
-                let wave1Opacity: Float = volumePercentage > 0 ? 1.0 : 0.0
-                sublayer.opacity = wave1Opacity
-                print("  🌊 Wave1: \(wave1Opacity)")
+                sublayer.opacity = isMuted ? 0.0 : (wave1Active ? 1.0 : inactiveWaveOpacity)
                 
             case "wave2":
-                // Deuxième onde active à partir de 33% (et pas de mute)
-                let wave2Opacity: Float = volumePercentage > 0.33 ? 1.0 : 0.0
-                sublayer.opacity = wave2Opacity
-                print("  🌊 Wave2: \(wave2Opacity)")
+                sublayer.opacity = isMuted ? 0.0 : (wave2Active ? 1.0 : inactiveWaveOpacity)
                 
             case "wave3":
-                // Troisième onde active à partir de 66% (et pas de mute)
-                let wave3Opacity: Float = volumePercentage > 0.66 ? 1.0 : 0.0
-                sublayer.opacity = wave3Opacity
-                print("  🌊 Wave3: \(wave3Opacity)")
+                sublayer.opacity = isMuted ? 0.0 : (wave3Active ? 1.0 : inactiveWaveOpacity)
                 
             default:
                 break
@@ -504,7 +517,6 @@ class NativeVolumeSlider: NSSlider {
         
         guard trackRect.contains(point) else { return }
         
-        // Marquer comme pressé pour cacher le stroke
         isThumbPressed = true
         
         let thumbMinX = 1 + thumbSize / 2
@@ -515,8 +527,6 @@ class NativeVolumeSlider: NSSlider {
         let percentage = thumbRange > 0 ? relativeX / thumbRange : 0
         let newValue = minValue + (maxValue - minValue) * Double(percentage)
         let finalValue = max(minValue, min(maxValue, newValue))
-        
-        print("🎯 Clic: \(doubleValue) -> \(finalValue)")
         
         doubleValue = finalValue
         updateLayerPositions()

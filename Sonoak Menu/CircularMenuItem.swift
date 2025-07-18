@@ -12,11 +12,11 @@ struct MenuItemConfig {
 
 // MARK: - Circular Menu Item Component
 class CircularMenuItem {
-    // MARK: - Constants
-    private static let iconSize: CGFloat = 16
+    // MARK: - Constants (dimensions originales)
+    private static let iconSize: CGFloat = 26
     private static let circleSize: CGFloat = 26
     private static let circleMargin: CGFloat = 3
-    private static let containerWidth: CGFloat = 200
+    private static let containerWidth: CGFloat = 300
     private static let containerHeight: CGFloat = 32
     private static let textLeftMargin: CGFloat = 46
     private static let textWidth: CGFloat = 140
@@ -92,13 +92,16 @@ class CircularMenuItem {
     
     private static func createIconView(config: MenuItemConfig) -> NSImageView {
         let iconView = NSImageView(frame: NSRect(
-            x: (circleSize - iconSize) / 2,
-            y: (circleSize - iconSize) / 2,
-            width: iconSize,
-            height: iconSize
+            x: 0, // Centrer dans le cercle de 26px
+            y: 0,
+            width: iconSize, // 26px
+            height: iconSize // 26px
         ))
         
+        // Récupérer l'icône depuis les Assets
         iconView.image = IconProvider.getIcon(config.iconName)
+        
+        // Configurer l'icône pour qu'elle s'adapte aux couleurs
         iconView.contentTintColor = config.isActive ? NSColor.white : NSColor.secondaryLabelColor
         
         return iconView
@@ -129,13 +132,12 @@ class CircularMenuItem {
                 circleView.layer?.backgroundColor = NSColor.systemBlue.cgColor
             }
         } else {
-            // Restaurer la couleur originale des cercles inactifs
             circleView.layer?.backgroundColor = NSColor.tertiaryLabelColor.cgColor
         }
     }
 }
 
-// MARK: - Icon Provider (repris du code existant)
+// MARK: - Icon Provider simplifié
 class IconProvider {
     private static var iconCache: [String: NSImage] = [:]
     
@@ -144,19 +146,42 @@ class IconProvider {
             return cached
         }
         
-        let icon: NSImage
-        if #available(macOS 11.0, *) {
-            icon = NSImage(systemSymbolName: iconName, accessibilityDescription: nil) ?? createFallbackIcon(iconName)
-        } else {
-            icon = createFallbackIcon(iconName)
+        // Mapper les noms d'icônes vers les noms des assets
+        let assetName = mapIconNameToAsset(iconName)
+        
+        // Charger l'icône depuis les Assets
+        if let icon = NSImage(named: assetName) {
+            // Configurer comme template pour adaptation automatique des couleurs
+            icon.isTemplate = true
+            iconCache[iconName] = icon
+            return icon
         }
         
-        iconCache[iconName] = icon
-        return icon
+        // Fallback vers l'ancien système si l'asset n'existe pas
+        let fallbackIcon = createFallbackIcon(iconName)
+        iconCache[iconName] = fallbackIcon
+        return fallbackIcon
+    }
+    
+    private static func mapIconNameToAsset(_ iconName: String) -> String {
+        switch iconName {
+        case "music.note":
+            return "spotify-icon"
+        case "bluetooth":
+            return "bluetooth-icon"
+        case "desktopcomputer":
+            return "macos-icon"
+        case "speaker.wave.3":
+            return "multiroom-icon"
+        case "slider.horizontal.3":
+            return "equalizer-icon"
+        default:
+            return iconName
+        }
     }
     
     private static func createFallbackIcon(_ iconName: String) -> NSImage {
-        let size = CGSize(width: 16, height: 16)
+        let size = CGSize(width: 26, height: 26)
         let image = NSImage(size: size)
         
         image.lockFocus()
@@ -174,46 +199,47 @@ class IconProvider {
             
         case "bluetooth":
             let path = NSBezierPath()
-            path.move(to: NSPoint(x: 6, y: 2))
-            path.line(to: NSPoint(x: 6, y: 14))
-            path.line(to: NSPoint(x: 10, y: 10))
-            path.line(to: NSPoint(x: 8, y: 8))
-            path.line(to: NSPoint(x: 10, y: 6))
-            path.line(to: NSPoint(x: 6, y: 2))
-            path.lineWidth = 1.5
+            path.move(to: NSPoint(x: 9, y: 4))
+            path.line(to: NSPoint(x: 9, y: 22))
+            path.line(to: NSPoint(x: 17, y: 16))
+            path.line(to: NSPoint(x: 13, y: 13))
+            path.line(to: NSPoint(x: 17, y: 10))
+            path.line(to: NSPoint(x: 9, y: 4))
+            path.lineWidth = 2
             path.stroke()
             
         case "desktopcomputer":
-            let screen = NSBezierPath(rect: NSRect(x: 3, y: 6, width: 10, height: 7))
+            let screen = NSBezierPath(rect: NSRect(x: 4, y: 8, width: 18, height: 12))
             screen.fill()
-            let base = NSBezierPath(rect: NSRect(x: 6, y: 4, width: 4, height: 2))
+            let base = NSBezierPath(rect: NSRect(x: 10, y: 6, width: 6, height: 3))
             base.fill()
             
         case "speaker.wave.3":
-            let speaker = NSBezierPath(rect: NSRect(x: 2, y: 6, width: 3, height: 4))
+            let speaker = NSBezierPath(rect: NSRect(x: 4, y: 10, width: 4, height: 6))
             speaker.fill()
             for i in 0..<3 {
                 let wave = NSBezierPath()
-                wave.move(to: NSPoint(x: 6 + i * 2, y: 6))
-                wave.curve(to: NSPoint(x: 6 + i * 2, y: 10),
-                          controlPoint1: NSPoint(x: 8 + i * 2, y: 6),
-                          controlPoint2: NSPoint(x: 8 + i * 2, y: 10))
-                wave.lineWidth = 1
+                wave.move(to: NSPoint(x: 9 + i * 3, y: 10))
+                wave.curve(to: NSPoint(x: 9 + i * 3, y: 16),
+                          controlPoint1: NSPoint(x: 12 + i * 3, y: 10),
+                          controlPoint2: NSPoint(x: 12 + i * 3, y: 16))
+                wave.lineWidth = 1.5
                 wave.stroke()
             }
             
         case "slider.horizontal.3":
             for i in 0..<3 {
-                let bar = NSBezierPath(rect: NSRect(x: 4 + i * 3, y: 4 + i * 2, width: 2, height: 8 - i * 2))
+                let bar = NSBezierPath(rect: NSRect(x: 6 + i * 5, y: 6 + i * 2, width: 3, height: 14 - i * 4))
                 bar.fill()
             }
             
         default:
-            let path = NSBezierPath(ovalIn: NSRect(x: 4, y: 4, width: 8, height: 8))
+            let path = NSBezierPath(ovalIn: NSRect(x: 6, y: 6, width: 14, height: 14))
             path.fill()
         }
         
         image.unlockFocus()
+        image.isTemplate = true
         return image
     }
 }
@@ -240,7 +266,6 @@ class HoverableView: NSView {
     }
     
     func configureHoverBackground(leftMargin: CGFloat, rightMargin: CGFloat) {
-        // Créer le layer pour le background hover
         hoverBackgroundLayer = CALayer()
         hoverBackgroundLayer?.frame = NSRect(
             x: leftMargin,
@@ -257,7 +282,7 @@ class HoverableView: NSView {
     private func setupTrackingArea() {
         let options: NSTrackingArea.Options = [
             .mouseEnteredAndExited,
-            .activeAlways, // Changé de .activeInKeyWindow à .activeAlways
+            .activeAlways,
             .inVisibleRect
         ]
         
@@ -283,14 +308,12 @@ class HoverableView: NSView {
     
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        // Forcer la mise à jour des tracking areas quand la vue est ajoutée à une fenêtre
         updateTrackingAreas()
     }
     
     override func mouseEntered(with event: NSEvent) {
         super.mouseEntered(with: event)
         
-        // Couleur SwiftUI native plus subtile pour dark mode
         let hoverColor: NSColor
         if #available(macOS 10.14, *) {
             hoverColor = NSColor.tertiaryLabelColor
@@ -298,7 +321,6 @@ class HoverableView: NSView {
             hoverColor = NSColor.lightGray.withAlphaComponent(0.2)
         }
         
-        // Désactiver les animations implicites
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         hoverBackgroundLayer?.backgroundColor = hoverColor.cgColor
@@ -308,7 +330,6 @@ class HoverableView: NSView {
     override func mouseExited(with event: NSEvent) {
         super.mouseExited(with: event)
         
-        // Désactiver les animations implicites
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         hoverBackgroundLayer?.backgroundColor = NSColor.clear.cgColor
@@ -324,7 +345,7 @@ class HoverableView: NSView {
     }
 }
 
-// MARK: - Clickable View (repris du code existant)
+// MARK: - Clickable View
 class ClickableView: NSView {
     var clickHandler: (() -> Void)?
     

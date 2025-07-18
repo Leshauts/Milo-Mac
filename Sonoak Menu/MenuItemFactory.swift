@@ -34,14 +34,29 @@ class MenuItemFactory {
         return item
     }
     
+    private static func createSecondaryHeader(title: String) -> NSMenuItem {
+        let item = NSMenuItem()
+        let headerView = NSView(frame: NSRect(x: 0, y: 0, width: containerWidth, height: 22))
+        
+        let titleLabel = NSTextField(labelWithString: title)
+        titleLabel.font = NSFont.systemFont(ofSize: 12, weight: .bold)
+        titleLabel.textColor = NSColor.secondaryLabelColor
+        titleLabel.frame = NSRect(x: 12, y: 2, width: 160, height: 16)
+        
+        headerView.addSubview(titleLabel)
+        item.view = headerView
+        
+        return item
+    }
+    
     private static func createVolumeHeader() -> NSMenuItem {
         let item = NSMenuItem()
-        let headerView = NSView(frame: NSRect(x: 0, y: 0, width: containerWidth, height: 24))
+        let headerView = NSView(frame: NSRect(x: 0, y: 0, width: containerWidth, height: 28))
         
         let titleLabel = NSTextField(labelWithString: "Volume")
         titleLabel.font = NSFont.systemFont(ofSize: 13, weight: .semibold)
         titleLabel.textColor = NSColor.labelColor
-        titleLabel.frame = NSRect(x: 20, y: 4, width: 160, height: 16)
+        titleLabel.frame = NSRect(x: 12, y: 4, width: 160, height: 16)
         
         headerView.addSubview(titleLabel)
         item.view = headerView
@@ -51,10 +66,10 @@ class MenuItemFactory {
     
     private static func createVolumeSlider(volume: Int, target: AnyObject, action: Selector) -> NSMenuItem {
         let item = NSMenuItem()
-        let containerView = MenuInteractionView(frame: NSRect(x: 0, y: 0, width: containerWidth, height: 34))
+        let containerView = MenuInteractionView(frame: NSRect(x: 0, y: 0, width: containerWidth, height: 31))
         
         // Utiliser notre slider personnalisé
-        let slider = NativeVolumeSlider(frame: NSRect(x: 20, y: 6, width: 160, height: 22))
+        let slider = NativeVolumeSlider(frame: NSRect(x: 12, y: 5, width: 160, height: 22))
         slider.doubleValue = Double(volume)
         slider.target = target
         slider.action = action
@@ -68,6 +83,10 @@ class MenuItemFactory {
     // MARK: - Audio Sources Section
     static func createAudioSourcesSection(state: OakOSState?, target: AnyObject, action: Selector) -> [NSMenuItem] {
         var items: [NSMenuItem] = []
+        
+        // Titre secondaire "Sortie"
+        let sortieHeader = createSecondaryHeader(title: "Sortie")
+        items.append(sortieHeader)
         
         let activeSource = state?.activeSource ?? "none"
         
@@ -106,6 +125,10 @@ class MenuItemFactory {
     // MARK: - System Controls Section
     static func createSystemControlsSection(state: OakOSState?, target: AnyObject, action: Selector) -> [NSMenuItem] {
         var items: [NSMenuItem] = []
+        
+        // Titre secondaire "Fonctionnalités"
+        let featuresHeader = createSecondaryHeader(title: "Fonctionnalités")
+        items.append(featuresHeader)
         
         items.append(CircularMenuItem.create(with: MenuItemConfig(
             title: "Multiroom",

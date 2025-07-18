@@ -18,11 +18,11 @@ class CircularMenuItem {
     private static let circleMargin: CGFloat = 3
     private static let containerWidth: CGFloat = 200
     private static let containerHeight: CGFloat = 32
-    private static let textLeftMargin: CGFloat = 48
+    private static let textLeftMargin: CGFloat = 46
     private static let textWidth: CGFloat = 140
     private static let textHeight: CGFloat = 16
     private static let textTopMargin: CGFloat = 8
-    private static let circleLeftMargin: CGFloat = 16
+    private static let circleLeftMargin: CGFloat = 14
     
     // MARK: - Public Interface
     static func create(with config: MenuItemConfig) -> NSMenuItem {
@@ -39,7 +39,7 @@ class CircularMenuItem {
     
     // MARK: - Private Methods
     private static func createContainerView(config: MenuItemConfig, menuItem: NSMenuItem) -> NSView {
-        let containerView = ClickableView(frame: NSRect(
+        let containerView = HoverableView(frame: NSRect(
             x: 0,
             y: 0,
             width: containerWidth,
@@ -54,6 +54,9 @@ class CircularMenuItem {
         containerView.clickHandler = { [weak target] in
             _ = target?.perform(action, with: menuItem)
         }
+        
+        // Configurer le background hover avec marges
+        containerView.configureHoverBackground(leftMargin: 5, rightMargin: 5)
         
         // Ajouter le cercle avec l'icône
         let circleView = createCircleView(config: config)
@@ -126,7 +129,8 @@ class CircularMenuItem {
                 circleView.layer?.backgroundColor = NSColor.systemBlue.cgColor
             }
         } else {
-            circleView.layer?.backgroundColor = NSColor.quaternaryLabelColor.cgColor
+            // Restaurer la couleur originale des cercles inactifs
+            circleView.layer?.backgroundColor = NSColor.tertiaryLabelColor.cgColor
         }
     }
 }
@@ -211,6 +215,105 @@ class IconProvider {
         
         image.unlockFocus()
         return image
+    }
+}
+
+// MARK: - Hoverable View
+class HoverableView: NSView {
+    var clickHandler: (() -> Void)?
+    private var trackingArea: NSTrackingArea?
+    private var hoverBackgroundLayer: CALayer?
+    
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        setupView()
+    }
+    
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        setupView()
+    }
+    
+    private func setupView() {
+        wantsLayer = true
+        setupTrackingArea()
+    }
+    
+    func configureHoverBackground(leftMargin: CGFloat, rightMargin: CGFloat) {
+        // Créer le layer pour le background hover
+        hoverBackgroundLayer = CALayer()
+        hoverBackgroundLayer?.frame = NSRect(
+            x: leftMargin,
+            y: 0,
+            width: bounds.width - leftMargin - rightMargin,
+            height: bounds.height
+        )
+        hoverBackgroundLayer?.cornerRadius = 6
+        hoverBackgroundLayer?.backgroundColor = NSColor.clear.cgColor
+        
+        layer?.insertSublayer(hoverBackgroundLayer!, at: 0)
+    }
+    
+    private func setupTrackingArea() {
+        let options: NSTrackingArea.Options = [
+            .mouseEnteredAndExited,
+            .activeInKeyWindow
+        ]
+        
+        trackingArea = NSTrackingArea(
+            rect: bounds,
+            options: options,
+            owner: self,
+            userInfo: nil
+        )
+        
+        addTrackingArea(trackingArea!)
+    }
+    
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        
+        if let trackingArea = trackingArea {
+            removeTrackingArea(trackingArea)
+        }
+        
+        setupTrackingArea()
+    }
+    
+    override func mouseEntered(with event: NSEvent) {
+        super.mouseEntered(with: event)
+        
+        // Couleur SwiftUI native plus subtile pour dark mode
+        let hoverColor: NSColor
+        if #available(macOS 10.14, *) {
+            hoverColor = NSColor.tertiaryLabelColor
+        } else {
+            hoverColor = NSColor.lightGray.withAlphaComponent(0.2)
+        }
+        
+        // Désactiver les animations implicites
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        hoverBackgroundLayer?.backgroundColor = hoverColor.cgColor
+        CATransaction.commit()
+    }
+    
+    override func mouseExited(with event: NSEvent) {
+        super.mouseExited(with: event)
+        
+        // Désactiver les animations implicites
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        hoverBackgroundLayer?.backgroundColor = NSColor.clear.cgColor
+        CATransaction.commit()
+    }
+    
+    override func mouseDown(with event: NSEvent) {
+        clickHandler?()
+    }
+    
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        return bounds.contains(point) ? self : nil
     }
 }
 

@@ -66,10 +66,12 @@ class MenuItemFactory {
     
     private static func createVolumeSlider(volume: Int, target: AnyObject, action: Selector) -> NSMenuItem {
         let item = NSMenuItem()
+        
+        // Container avec la largeur complète
         let containerView = MenuInteractionView(frame: NSRect(x: 0, y: 0, width: containerWidth, height: 31))
         
-        // Utiliser notre slider personnalisé
-        let slider = NativeVolumeSlider(frame: NSRect(x: 12, y: 5, width: 160, height: 22))
+        // Slider avec marges de 14px de chaque côté (même largeur que les séparateurs)
+        let slider = NativeVolumeSlider(frame: NSRect(x: 14, y: 5, width: containerWidth - 28, height: 22))
         slider.doubleValue = Double(volume)
         slider.target = target
         slider.action = action

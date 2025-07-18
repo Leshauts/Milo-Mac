@@ -257,7 +257,8 @@ class HoverableView: NSView {
     private func setupTrackingArea() {
         let options: NSTrackingArea.Options = [
             .mouseEnteredAndExited,
-            .activeInKeyWindow
+            .activeAlways, // Changé de .activeInKeyWindow à .activeAlways
+            .inVisibleRect
         ]
         
         trackingArea = NSTrackingArea(
@@ -278,6 +279,12 @@ class HoverableView: NSView {
         }
         
         setupTrackingArea()
+    }
+    
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        // Forcer la mise à jour des tracking areas quand la vue est ajoutée à une fenêtre
+        updateTrackingAreas()
     }
     
     override func mouseEntered(with event: NSEvent) {

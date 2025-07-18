@@ -3,6 +3,8 @@ import AppKit
 // MARK: - Native Volume Slider
 class NativeVolumeSlider: NSSlider {
     private let trackHeight: CGFloat = 22
+    private let fillHeight: CGFloat = 20
+    private let thumbSize: CGFloat = 20
     
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -37,76 +39,137 @@ class NativeVolumeSlider: NSSlider {
     }
     
     override func draw(_ dirtyRect: NSRect) {
-        // Dessiner notre slider personnalisé
         drawCustomSlider(in: bounds)
     }
     
     private func drawCustomSlider(in rect: NSRect) {
-        // Calculer la position du track centré verticalement
+        // Calculer la position du track centré verticalement - sans marge à gauche
         let trackY = rect.midY - trackHeight / 2
-        let trackRect = NSRect(x: rect.minX + 5, y: trackY, width: rect.width - 10, height: trackHeight)
+        let trackRect = NSRect(x: rect.minX, y: trackY, width: rect.width, height: trackHeight)
         
-        // Dessiner le track de fond (gris clair)
+        // Dessiner le track de fond (même couleur que le hover de CircularMenuItem)
         let trackPath = NSBezierPath(roundedRect: trackRect, xRadius: trackHeight / 2, yRadius: trackHeight / 2)
-        NSColor.quaternaryLabelColor.setFill()
+        if #available(macOS 10.14, *) {
+            NSColor.tertiaryLabelColor.setFill()
+        } else {
+            NSColor.lightGray.withAlphaComponent(0.2).setFill()
+        }
         trackPath.fill()
         
-        // Calculer la largeur du fill basé sur la valeur
-        let fillWidth = trackRect.width * CGFloat((doubleValue - minValue) / (maxValue - minValue))
+        // Calculer le pourcentage de la valeur
+        let percentage = CGFloat((doubleValue - minValue) / (maxValue - minValue))
         
-        if fillWidth > 0 {
-            // Dessiner le fill blanc
-            let fillRect = NSRect(x: trackRect.minX, y: trackRect.minY, width: fillWidth, height: trackRect.height)
-            let fillPath = NSBezierPath(roundedRect: fillRect, xRadius: trackHeight / 2, yRadius: trackHeight / 2)
-            NSColor.white.setFill()
-            fillPath.fill()
+        // Zone de l'icône - carrée/ronde de la même taille que fillHeight
+        let iconZoneSize = fillHeight // 20px x 20px
+        let iconZoneRect = NSRect(
+            x: trackRect.minX + 1,
+            y: trackY + 1,
+            width: iconZoneSize,
+            height: iconZoneSize
+        )
+        
+        // Position du thumb - peut aller jusqu'au bord gauche du track (avec marge de 1px)
+        let thumbMinX = trackRect.minX + 1 + thumbSize / 2 // Marge de 1px + rayon du thumb
+        let thumbMaxX = trackRect.maxX - 1 - thumbSize / 2 // Marge de 1px + rayon du thumb
+        let thumbRange = thumbMaxX - thumbMinX
+        let thumbCenterX = thumbMinX + (thumbRange * percentage)
+        let thumbY = rect.midY - thumbSize / 2
+        
+        // TOUJOURS dessiner le fond blanc de la zone d'icône en premier
+        let iconZonePath = NSBezierPath(ovalIn: iconZoneRect)
+        NSColor.white.setFill()
+        iconZonePath.fill()
+        
+        // Dessiner la barre blanche continue SEULEMENT si percentage > 0
+        if percentage > 0 {
+            let fillY = trackY + 1
+            let fillEndX = thumbCenterX
             
-            // Ajouter l'icône volume à l'intérieur du fill
-            drawVolumeIcon(in: fillRect)
+            // La barre commence depuis le centre de la zone d'icône pour éviter le clipping
+            let fillStartX = iconZoneRect.midX
+            
+            // Créer la barre complète du centre de l'icône jusqu'au centre du thumb
+            let fillRect = NSRect(
+                x: fillStartX,
+                y: fillY,
+                width: max(0, fillEndX - fillStartX),
+                height: fillHeight
+            )
+            
+            if fillRect.width > 0 {
+                // Rectangle simple sans arrondi (l'arrondi gauche est géré par la zone d'icône)
+                let fillPath = NSBezierPath(rect: fillRect)
+                NSColor.white.setFill()
+                fillPath.fill()
+            }
         }
+        
+        // Dessiner le thumb circulaire blanc
+        let thumbRect = NSRect(x: thumbCenterX - thumbSize / 2, y: thumbY, width: thumbSize, height: thumbSize)
+        let thumbPath = NSBezierPath(ovalIn: thumbRect)
+        NSColor.white.setFill()
+        thumbPath.fill()
+        
+        // Ajouter un contour subtil au thumb pour plus de définition
+        let thumbStroke = NSBezierPath(ovalIn: thumbRect)
+        NSColor.black.withAlphaComponent(0.1).setStroke()
+        thumbStroke.lineWidth = 0.5
+        thumbStroke.stroke()
+        
+        // Dessiner l'icône volume EN DERNIER (premier plan) - toujours visible
+        drawVolumeIcon(in: iconZoneRect)
     }
     
     private func drawVolumeIcon(in rect: NSRect) {
         // Dessiner une icône de volume simple à gauche du fill
-        let iconSize: CGFloat = 12
-        let iconX = rect.minX + 8
+        let iconSize: CGFloat = 10
+        let iconX = rect.minX + 6
         let iconY = rect.midY - iconSize / 2
         let iconRect = NSRect(x: iconX, y: iconY, width: iconSize, height: iconSize)
-        
-        // Vérifier qu'on a assez d'espace pour l'icône
-        guard rect.width > iconSize + 16 else { return }
         
         NSColor.black.setFill()
         
         // Dessiner l'icône du haut-parleur
         let speakerPath = NSBezierPath()
-        speakerPath.move(to: NSPoint(x: iconRect.minX, y: iconRect.minY + 3))
-        speakerPath.line(to: NSPoint(x: iconRect.minX + 3, y: iconRect.minY + 3))
-        speakerPath.line(to: NSPoint(x: iconRect.minX + 6, y: iconRect.minY))
-        speakerPath.line(to: NSPoint(x: iconRect.minX + 6, y: iconRect.maxY))
-        speakerPath.line(to: NSPoint(x: iconRect.minX + 3, y: iconRect.maxY - 3))
-        speakerPath.line(to: NSPoint(x: iconRect.minX, y: iconRect.maxY - 3))
+        speakerPath.move(to: NSPoint(x: iconRect.minX, y: iconRect.minY + 2))
+        speakerPath.line(to: NSPoint(x: iconRect.minX + 2, y: iconRect.minY + 2))
+        speakerPath.line(to: NSPoint(x: iconRect.minX + 4, y: iconRect.minY))
+        speakerPath.line(to: NSPoint(x: iconRect.minX + 4, y: iconRect.maxY))
+        speakerPath.line(to: NSPoint(x: iconRect.minX + 2, y: iconRect.maxY - 2))
+        speakerPath.line(to: NSPoint(x: iconRect.minX, y: iconRect.maxY - 2))
         speakerPath.close()
         speakerPath.fill()
         
-        // Ajouter les ondes sonores
-        let wave1 = NSBezierPath()
-        wave1.move(to: NSPoint(x: iconRect.minX + 8, y: iconRect.minY + 4))
-        wave1.curve(to: NSPoint(x: iconRect.minX + 8, y: iconRect.maxY - 4),
-                   controlPoint1: NSPoint(x: iconRect.minX + 10, y: iconRect.minY + 4),
-                   controlPoint2: NSPoint(x: iconRect.minX + 10, y: iconRect.maxY - 4))
-        wave1.lineWidth = 1
-        wave1.stroke()
+        // Ajouter une onde sonore
+        let wave = NSBezierPath()
+        wave.move(to: NSPoint(x: iconRect.minX + 6, y: iconRect.minY + 3))
+        wave.curve(to: NSPoint(x: iconRect.minX + 6, y: iconRect.maxY - 3),
+                   controlPoint1: NSPoint(x: iconRect.minX + 8, y: iconRect.minY + 3),
+                   controlPoint2: NSPoint(x: iconRect.minX + 8, y: iconRect.maxY - 3))
+        wave.lineWidth = 0.8
+        wave.stroke()
     }
     
     override func mouseDown(with event: NSEvent) {
-        // Gérer le clic pour ajuster la valeur
+        updateValueFromMouse(event)
+    }
+    
+    override func mouseDragged(with event: NSEvent) {
+        updateValueFromMouse(event)
+    }
+    
+    private func updateValueFromMouse(_ event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
-        let trackRect = NSRect(x: 5, y: bounds.midY - trackHeight / 2, width: bounds.width - 10, height: trackHeight)
+        let trackRect = NSRect(x: 0, y: bounds.midY - trackHeight / 2, width: bounds.width, height: trackHeight)
         
-        if trackRect.contains(point) {
-            let relativeX = point.x - trackRect.minX
-            let percentage = relativeX / trackRect.width
+        if trackRect.contains(point) || event.type == .leftMouseDragged {
+            // Calculer les limites du thumb - peut aller jusqu'aux bords avec marge de 1px
+            let thumbMinX = trackRect.minX + 1 + thumbSize / 2
+            let thumbMaxX = trackRect.maxX - 1 - thumbSize / 2
+            let thumbRange = thumbMaxX - thumbMinX
+            
+            let relativeX = max(0, min(thumbRange, point.x - thumbMinX))
+            let percentage = thumbRange > 0 ? relativeX / thumbRange : 0
             let newValue = minValue + (maxValue - minValue) * Double(percentage)
             
             doubleValue = max(minValue, min(maxValue, newValue))
@@ -118,11 +181,6 @@ class NativeVolumeSlider: NSSlider {
             
             needsDisplay = true
         }
-    }
-    
-    override func mouseDragged(with event: NSEvent) {
-        // Même logique que mouseDown pour le drag
-        mouseDown(with: event)
     }
 }
 

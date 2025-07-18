@@ -24,9 +24,78 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
     }
     
     private func setupStatusItem() {
-        statusItem.button?.title = "🎵"
+        // Utiliser l'icône SVG personnalisée au lieu du texte
+        statusItem.button?.image = createCustomIcon()
         statusItem.button?.target = self
         statusItem.button?.action = #selector(menuButtonClicked)
+        
+        // Configurer l'image pour qu'elle soit template (s'adapte au thème)
+        statusItem.button?.image?.isTemplate = true
+    }
+    
+    private func createCustomIcon() -> NSImage {
+        // Taille standard pour les icônes de menu bar macOS
+        let size = NSSize(width: 22, height: 22)
+        let image = NSImage(size: size)
+        
+        image.lockFocus()
+        
+        // Convertir les coordonnées SVG (24x24) vers notre taille (22x22)
+        let scale = size.width / 24.0
+        let context = NSGraphicsContext.current?.cgContext
+        context?.scaleBy(x: scale, y: scale)
+        
+        // Dessiner le path principal (opacité 1.0)
+        let path1 = NSBezierPath()
+        path1.move(to: NSPoint(x: 12.1329, y: 8.1009)) // Inverser Y pour macOS
+        path1.curve(to: NSPoint(x: 18.2837, y: 10.1567),
+                   controlPoint1: NSPoint(x: 13.1013, y: 9.7746),
+                   controlPoint2: NSPoint(x: 15.4069, y: 10.4476))
+        path1.line(to: NSPoint(x: 21.2536, y: 5.0007))
+        path1.line(to: NSPoint(x: 11.8209, y: 5.0007))
+        path1.curve(to: NSPoint(x: 12.1329, y: 8.1009),
+                   controlPoint1: NSPoint(x: 11.5386, y: 6.1542),
+                   controlPoint2: NSPoint(x: 11.6232, y: 7.2198))
+        path1.close()
+        
+        // Utiliser blanc pur (#FFF) avec opacité 1.0
+        NSColor.white.setFill()
+        path1.fill()
+        
+        // Dessiner le path 2 (opacité 0.7)
+        let path2 = NSBezierPath()
+        path2.move(to: NSPoint(x: 9.14838, y: 10.9704))
+        path2.curve(to: NSPoint(x: 9.03931, y: 5.0013),
+                   controlPoint1: NSPoint(x: 10.1293, y: 9.2748),
+                   controlPoint2: NSPoint(x: 10.0176, y: 7.1431))
+        path2.line(to: NSPoint(x: 2.7464, y: 5.0))
+        path2.line(to: NSPoint(x: 7.29157, y: 12.8265))
+        path2.curve(to: NSPoint(x: 9.14838, y: 10.9704),
+                   controlPoint1: NSPoint(x: 8.0696, y: 12.3585),
+                   controlPoint2: NSPoint(x: 8.70418, y: 11.7398))
+        path2.close()
+        
+        NSColor.white.withAlphaComponent(0.7).setFill()
+        path2.fill()
+        
+        // Dessiner le path 3 (opacité 0.34)
+        let path3 = NSBezierPath()
+        path3.move(to: NSPoint(x: 13.8436, y: 11.7358))
+        path3.curve(to: NSPoint(x: 16.8089, y: 12.7154),
+                   controlPoint1: NSPoint(x: 14.9045, y: 11.7358),
+                   controlPoint2: NSPoint(x: 15.9106, y: 12.0875))
+        path3.line(to: NSPoint(x: 12.0397, y: 21.0))
+        path3.line(to: NSPoint(x: 8.65524, y: 15.17509))
+        path3.curve(to: NSPoint(x: 13.8436, y: 11.7358),
+                   controlPoint1: NSPoint(x: 9.92639, y: 13.0651),
+                   controlPoint2: NSPoint(x: 11.7799, y: 11.7365))
+        path3.close()
+        
+        NSColor.white.withAlphaComponent(0.34).setFill()
+        path3.fill()
+        
+        image.unlockFocus()
+        return image
     }
     
     private func setupServices() {
@@ -41,6 +110,7 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
     
     private func updateIcon() {
         DispatchQueue.main.async { [weak self] in
+            // Changer l'opacité selon l'état de connexion
             self?.statusItem.button?.alphaValue = self?.isOakOSConnected == true ? 1.0 : 0.5
         }
     }

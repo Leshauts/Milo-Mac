@@ -6,7 +6,7 @@ class MenuItemFactory {
     private static let iconSize: CGFloat = 16
     private static let circleSize: CGFloat = 26
     private static let circleMargin: CGFloat = 3
-    private static let containerWidth: CGFloat = 200
+    private static let containerWidth: CGFloat = 300
     private static let containerHeight: CGFloat = 32
     
     // MARK: - Volume Section
@@ -53,10 +53,11 @@ class MenuItemFactory {
         let item = NSMenuItem()
         let headerView = NSView(frame: NSRect(x: 0, y: 0, width: containerWidth, height: 28))
         
-        let titleLabel = NSTextField(labelWithString: "Volume")
+        let titleLabel = NSTextField(labelWithString: "Volume Sonoak")
         titleLabel.font = NSFont.systemFont(ofSize: 13, weight: .semibold)
         titleLabel.textColor = NSColor.labelColor
         titleLabel.frame = NSRect(x: 12, y: 4, width: 160, height: 16)
+        
         
         headerView.addSubview(titleLabel)
         item.view = headerView

@@ -83,8 +83,25 @@ class MenuItemFactory {
         return item
     }
     
-    // MARK: - Audio Sources Section
+    // MARK: - Audio Sources Section (version originale)
     static func createAudioSourcesSection(state: OakOSState?, target: AnyObject, action: Selector) -> [NSMenuItem] {
+        return createAudioSourcesSectionWithLoading(
+            state: state,
+            loadingStates: [:],
+            loadingTarget: nil,
+            target: target,
+            action: action
+        )
+    }
+    
+    // MARK: - Audio Sources Section (avec support loading)
+    static func createAudioSourcesSectionWithLoading(
+        state: OakOSState?,
+        loadingStates: [String: Bool],
+        loadingTarget: String?,  // Quelle source est en cours de loading
+        target: AnyObject,
+        action: Selector
+    ) -> [NSMenuItem] {
         var items: [NSMenuItem] = []
         
         // Titre secondaire "Sortie"
@@ -93,32 +110,53 @@ class MenuItemFactory {
         
         let activeSource = state?.activeSource ?? "none"
         
-        items.append(CircularMenuItem.create(with: MenuItemConfig(
-            title: "Spotify",
-            iconName: "music.note",
-            isActive: activeSource == "librespot",
-            target: target,
-            action: action,
-            representedObject: "librespot"
-        )))
+        // Spotify
+        let spotifyIsLoading = loadingStates["librespot"] ?? false
+        let spotifyIsLoadingTarget = loadingTarget == "librespot"
+        items.append(CircularMenuItem.createWithLoadingSupport(
+            with: MenuItemConfig(
+                title: "Spotify",
+                iconName: "music.note",
+                isActive: activeSource == "librespot" && !spotifyIsLoading,  // Pas actif si en loading
+                target: target,
+                action: action,
+                representedObject: "librespot"
+            ),
+            isLoading: spotifyIsLoading,
+            loadingIsActive: spotifyIsLoadingTarget
+        ))
         
-        items.append(CircularMenuItem.create(with: MenuItemConfig(
-            title: "Bluetooth",
-            iconName: "bluetooth",
-            isActive: activeSource == "bluetooth",
-            target: target,
-            action: action,
-            representedObject: "bluetooth"
-        )))
+        // Bluetooth
+        let bluetoothIsLoading = loadingStates["bluetooth"] ?? false
+        let bluetoothIsLoadingTarget = loadingTarget == "bluetooth"
+        items.append(CircularMenuItem.createWithLoadingSupport(
+            with: MenuItemConfig(
+                title: "Bluetooth",
+                iconName: "bluetooth",
+                isActive: activeSource == "bluetooth" && !bluetoothIsLoading,  // Pas actif si en loading
+                target: target,
+                action: action,
+                representedObject: "bluetooth"
+            ),
+            isLoading: bluetoothIsLoading,
+            loadingIsActive: bluetoothIsLoadingTarget
+        ))
         
-        items.append(CircularMenuItem.create(with: MenuItemConfig(
-            title: "macOS",
-            iconName: "desktopcomputer",
-            isActive: activeSource == "roc",
-            target: target,
-            action: action,
-            representedObject: "roc"
-        )))
+        // macOS
+        let rocIsLoading = loadingStates["roc"] ?? false
+        let rocIsLoadingTarget = loadingTarget == "roc"
+        items.append(CircularMenuItem.createWithLoadingSupport(
+            with: MenuItemConfig(
+                title: "macOS",
+                iconName: "desktopcomputer",
+                isActive: activeSource == "roc" && !rocIsLoading,  // Pas actif si en loading
+                target: target,
+                action: action,
+                representedObject: "roc"
+            ),
+            isLoading: rocIsLoading,
+            loadingIsActive: rocIsLoadingTarget
+        ))
         
         items.append(NSMenuItem.separator())
         

@@ -14,6 +14,12 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
     
     private let volumeController = VolumeController()
     
+    // MARK: - Nouvelles propriétés pour le loading
+    private var loadingStates: [String: Bool] = [:]
+    private var loadingTimers: [String: Timer] = [:]
+    private var loadingStartTimes: [String: Date] = [:]  // Pour gérer le délai minimum
+    private var loadingTarget: String?  // Quelle source est la cible du loading
+    
     init(statusItem: NSStatusItem) {
         self.statusItem = statusItem
         super.init()
@@ -124,7 +130,7 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
         menu.font = NSFont.menuFont(ofSize: 13)
         
         if isOakOSConnected {
-            buildConnectedMenu(menu)
+            buildConnectedMenuWithLoading(menu)
         } else {
             buildDisconnectedMenu(menu)
         }
@@ -142,7 +148,7 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
         }
     }
     
-    private func buildConnectedMenu(_ menu: NSMenu) {
+    private func buildConnectedMenuWithLoading(_ menu: NSMenu) {
         // 1. Section Volume (en premier)
         let volumeItems = MenuItemFactory.createVolumeSection(
             volume: currentVolume?.volume ?? 50,
@@ -154,19 +160,21 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
         // Configurer le contrôleur de volume
         if let sliderItem = volumeItems.first(where: { $0.view is MenuInteractionView }),
            let sliderView = sliderItem.view as? MenuInteractionView,
-           let slider = sliderView.subviews.first(where: { $0 is NativeVolumeSlider }) as? NSSlider {
+           let slider = sliderView.subviews.first(where: { $0 is NSSlider }) as? NSSlider {
             volumeController.setVolumeSlider(slider)
         }
         
-        // 2. Sources audio
-        let sourceItems = MenuItemFactory.createAudioSourcesSection(
+        // 2. Sources audio avec support loading
+        let sourceItems = MenuItemFactory.createAudioSourcesSectionWithLoading(
             state: currentState,
+            loadingStates: loadingStates,
+            loadingTarget: loadingTarget,
             target: self,
-            action: #selector(sourceClicked)
+            action: #selector(sourceClickedWithLoading)
         )
         sourceItems.forEach { menu.addItem($0) }
         
-        // 3. Contrôles système
+        // 3. Contrôles système (inchangé)
         let systemItems = MenuItemFactory.createSystemControlsSection(
             state: currentState,
             target: self,
@@ -187,16 +195,151 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
         volumeController.activeMenu = nil
     }
     
+    // MARK: - Méthodes de gestion du loading
+    private func setLoadingState(for sourceId: String, isLoading: Bool) {
+        print("🔄 setLoadingState: \(sourceId) -> \(isLoading)")
+        
+        // Éviter les mises à jour inutiles
+        if loadingStates[sourceId] == isLoading {
+            print("⚠️ État déjà à \(isLoading) pour \(sourceId), pas de mise à jour")
+            return
+        }
+        
+        let oldState = loadingStates[sourceId] ?? false
+        loadingStates[sourceId] = isLoading
+        
+        // Mettre à jour SEULEMENT l'item spécifique, et seulement si l'état change vraiment
+        if let menu = activeMenu, oldState != isLoading {
+            print("🎯 Mise à jour spécifique de l'item \(sourceId) (\(oldState) -> \(isLoading))")
+            updateSourceLoadingInMenu(menu, sourceId: sourceId, isLoading: isLoading)
+        } else if oldState == isLoading {
+            print("🔒 Pas de mise à jour UI pour \(sourceId), état identique (\(isLoading))")
+        }
+    }
+    
+    private func stopLoadingForSource(_ sourceId: String) {
+        setLoadingState(for: sourceId, isLoading: false)
+        loadingTimers[sourceId]?.invalidate()
+        loadingTimers[sourceId] = nil
+        loadingStartTimes[sourceId] = nil
+        
+        // Reset la cible du loading si c'est cette source
+        if loadingTarget == sourceId {
+            loadingTarget = nil
+        }
+    }
+    
+    private func updateSourceLoadingInMenu(_ menu: NSMenu, sourceId: String, isLoading: Bool) {
+        // Trouver l'item correspondant au sourceId
+        for item in menu.items {
+            if let representedObject = item.representedObject as? String,
+               representedObject == sourceId {
+                
+                // Créer la config pour cet item
+                let config = getMenuItemConfig(for: sourceId)
+                let loadingIsActive = loadingTarget == sourceId
+                
+                // Mettre à jour l'état de loading
+                CircularMenuItem.updateItemLoadingState(item, isLoading: isLoading, config: config, loadingIsActive: loadingIsActive)
+                break
+            }
+        }
+    }
+    
+    private func getMenuItemConfig(for sourceId: String) -> MenuItemConfig {
+        let activeSource = currentState?.activeSource ?? "none"
+        let isCurrentlyLoading = loadingStates[sourceId] ?? false
+        let isLoadingTarget = loadingTarget == sourceId
+        
+        // Une source est considérée active si :
+        // - Elle est la source active actuelle
+        // - ET (pas de loading en cours OU elle est la cible du loading)
+        // - ET pas un autre plugin en cours de loading
+        let hasOtherLoading = loadingTarget != nil && loadingTarget != sourceId
+        let isActive = (activeSource == sourceId) && !hasOtherLoading && (!isCurrentlyLoading || isLoadingTarget)
+        
+        switch sourceId {
+        case "librespot":
+            return MenuItemConfig(
+                title: "Spotify",
+                iconName: "music.note",
+                isActive: isActive,
+                target: self,
+                action: #selector(sourceClickedWithLoading),
+                representedObject: "librespot"
+            )
+        case "bluetooth":
+            return MenuItemConfig(
+                title: "Bluetooth",
+                iconName: "bluetooth",
+                isActive: isActive,
+                target: self,
+                action: #selector(sourceClickedWithLoading),
+                representedObject: "bluetooth"
+            )
+        case "roc":
+            return MenuItemConfig(
+                title: "macOS",
+                iconName: "desktopcomputer",
+                isActive: isActive,
+                target: self,
+                action: #selector(sourceClickedWithLoading),
+                representedObject: "roc"
+            )
+        default:
+            return MenuItemConfig(
+                title: "Unknown",
+                iconName: "music.note",
+                isActive: false,
+                target: self,
+                action: #selector(sourceClickedWithLoading),
+                representedObject: sourceId
+            )
+        }
+    }
+    
     // MARK: - Actions
-    @objc private func sourceClicked(_ sender: NSMenuItem) {
+    @objc private func sourceClickedWithLoading(_ sender: NSMenuItem) {
         guard let apiService = apiService,
               let sourceId = sender.representedObject as? String else { return }
+        
+        // Empêcher les clics multiples si déjà en loading
+        if loadingStates[sourceId] == true {
+            print("⚠️ Source \(sourceId) déjà en loading, ignorer le clic")
+            return
+        }
+        
+        print("🔄 Démarrage du loading pour \(sourceId)")
+        
+        // Définir la cible du loading pour l'affichage
+        loadingTarget = sourceId
+        
+        // Enregistrer l'heure de début
+        loadingStartTimes[sourceId] = Date()
+        
+        // Démarrer le loading
+        setLoadingState(for: sourceId, isLoading: true)
+        
+        // Timer de sécurité pour arrêter le loading après 15 secondes max (augmenté pour voir)
+        loadingTimers[sourceId]?.invalidate()
+        loadingTimers[sourceId] = Timer.scheduledTimer(withTimeInterval: 15.0, repeats: false) { _ in
+            Task { @MainActor in
+                print("⏱️ Timeout loading pour \(sourceId)")
+                self.stopLoadingForSource(sourceId)
+            }
+        }
         
         Task {
             do {
                 try await apiService.changeSource(sourceId)
+                print("✅ API call réussie pour \(sourceId)")
             } catch {
                 print("❌ Erreur changement source: \(error)")
+                // Arrêter le loading en cas d'erreur
+                await MainActor.run {
+                    print("❌ Arrêt du loading suite à l'erreur pour \(sourceId)")
+                    self.stopLoadingForSource(sourceId)
+                }
             }
         }
     }
@@ -307,6 +450,15 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
         currentState = nil
         currentVolume = nil
         
+        // Nettoyer les états de loading
+        for (sourceId, _) in loadingStates {
+            loadingStates[sourceId] = false
+            loadingTimers[sourceId]?.invalidate()
+            loadingTimers[sourceId] = nil
+            loadingStartTimes[sourceId] = nil
+        }
+        loadingTarget = nil
+        
         volumeController.cleanup()
         webSocketService.disconnect()
         
@@ -317,10 +469,50 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
     
     // MARK: - WebSocketServiceDelegate
     func didReceiveStateUpdate(_ state: OakOSState) {
+        print("📡 État reçu: activeSource=\(state.activeSource), transitioning=\(state.isTransitioning)")
         currentState = state
         
-        if let menu = activeMenu {
+        // Ne stopper le loading que si la transition est terminée ET la source a changé
+        if !state.isTransitioning {
+            for (sourceId, isLoading) in loadingStates {
+                if isLoading {
+                    print("🔍 Checking loading state for \(sourceId), current active: \(state.activeSource)")
+                    // Vérifier si cette source est maintenant active (transition réussie)
+                    if state.activeSource == sourceId {
+                        // Transition réussie, mais respecter le délai minimum
+                        let startTime = loadingStartTimes[sourceId] ?? Date()
+                        let elapsed = Date().timeIntervalSince(startTime)
+                        let minimumDuration: TimeInterval = 1.0  // 1 seconde minimum
+                        
+                        if elapsed >= minimumDuration {
+                            // Délai minimum écoulé, arrêter immédiatement
+                            print("✅ Transition réussie vers \(sourceId), arrêt du loading (délai écoulé)")
+                            stopLoadingForSource(sourceId)
+                        } else {
+                            // Attendre le délai minimum
+                            let remainingTime = minimumDuration - elapsed
+                            print("⏱️ Attendre \(remainingTime)s avant d'arrêter le loading pour \(sourceId)")
+                            
+                            DispatchQueue.main.asyncAfter(deadline: .now() + remainingTime) { [weak self] in
+                                print("✅ Délai minimum écoulé, arrêt du loading pour \(sourceId)")
+                                self?.stopLoadingForSource(sourceId)
+                            }
+                        }
+                    }
+                    // Sinon, laisser le loading continuer (cas d'échec, géré par le timer de sécurité)
+                }
+            }
+        } else {
+            print("⏳ Transition en cours, loading continue...")
+        }
+        
+        // NE PAS recréer le menu pendant un loading !
+        let hasActiveLoading = loadingStates.values.contains(true)
+        if let menu = activeMenu, !hasActiveLoading {
+            print("🔄 Mise à jour du menu (pas de loading actif)")
             updateMenuInRealTime(menu)
+        } else if hasActiveLoading {
+            print("⏸️ Loading en cours, menu non recréé pour préserver l'animation")
         }
     }
     
@@ -342,7 +534,7 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
         menu.removeAllItems()
         
         if isOakOSConnected {
-            buildConnectedMenu(menu)
+            buildConnectedMenuWithLoading(menu)
         } else {
             buildDisconnectedMenu(menu)
         }

@@ -37,8 +37,25 @@ class CircularMenuItem {
         return item
     }
     
+    // MARK: - Public Interface avec support loading
+    static func createWithLoadingSupport(with config: MenuItemConfig, isLoading: Bool = false, loadingIsActive: Bool = false) -> NSMenuItem {
+        let item = NSMenuItem()
+        item.target = config.target
+        item.action = config.action
+        item.representedObject = config.representedObject
+        
+        let containerView = createContainerViewWithLoading(config: config, menuItem: item, isLoading: isLoading, loadingIsActive: loadingIsActive)
+        item.view = containerView
+        
+        return item
+    }
+    
     // MARK: - Private Methods
     private static func createContainerView(config: MenuItemConfig, menuItem: NSMenuItem) -> NSView {
+        return createContainerViewWithLoading(config: config, menuItem: menuItem, isLoading: false, loadingIsActive: false)
+    }
+    
+    private static func createContainerViewWithLoading(config: MenuItemConfig, menuItem: NSMenuItem, isLoading: Bool, loadingIsActive: Bool = false) -> NSView {
         let containerView = HoverableView(frame: NSRect(
             x: 0,
             y: 0,
@@ -46,20 +63,17 @@ class CircularMenuItem {
             height: containerHeight
         ))
         
-        // Capturer les valeurs nécessaires pour la closure
         let target = config.target
         let action = config.action
         
-        // Gérer le clic
         containerView.clickHandler = { [weak target] in
             _ = target?.perform(action, with: menuItem)
         }
         
-        // Configurer le background hover avec marges
         containerView.configureHoverBackground(leftMargin: 5, rightMargin: 5)
         
-        // Ajouter le cercle avec l'icône
-        let circleView = createCircleView(config: config)
+        // Créer le cercle avec loader ou icône
+        let circleView = createCircleViewWithLoading(config: config, isLoading: isLoading, loadingIsActive: loadingIsActive)
         containerView.addSubview(circleView)
         
         // Ajouter le texte
@@ -70,6 +84,10 @@ class CircularMenuItem {
     }
     
     private static func createCircleView(config: MenuItemConfig) -> NSView {
+        return createCircleViewWithLoading(config: config, isLoading: false, loadingIsActive: false)
+    }
+    
+    private static func createCircleViewWithLoading(config: MenuItemConfig, isLoading: Bool, loadingIsActive: Bool = false) -> NSView {
         let circleView = NSView(frame: NSRect(
             x: circleLeftMargin,
             y: circleMargin,
@@ -80,12 +98,32 @@ class CircularMenuItem {
         circleView.wantsLayer = true
         circleView.layer?.cornerRadius = circleSize / 2
         
-        // Appliquer la couleur selon l'état
-        applyCircleColor(to: circleView, isActive: config.isActive)
-        
-        // Ajouter l'icône
-        let iconView = createIconView(config: config)
-        circleView.addSubview(iconView)
+        if isLoading {
+            // État loading : fond bleu si loadingIsActive, sinon gris
+            if loadingIsActive {
+                // Fond bleu comme un élément actif
+                if #available(macOS 10.14, *) {
+                    circleView.layer?.backgroundColor = NSColor.controlAccentColor.cgColor
+                } else {
+                    circleView.layer?.backgroundColor = NSColor.systemBlue.cgColor
+                }
+            } else {
+                // Fond gris pour loading inactif
+                circleView.layer?.backgroundColor = NSColor.systemGray.cgColor
+            }
+            
+            // Ajouter le spinner blanc
+            let spinner = LoadingSpinner(frame: NSRect(x: 0, y: 0, width: circleSize, height: circleSize))
+            circleView.addSubview(spinner)
+            spinner.startAnimating()
+            
+        } else {
+            // État normal : couleur selon l'activation + icône
+            applyCircleColor(to: circleView, isActive: config.isActive)
+            
+            let iconView = createIconView(config: config)
+            circleView.addSubview(iconView)
+        }
         
         return circleView
     }
@@ -133,6 +171,73 @@ class CircularMenuItem {
             }
         } else {
             circleView.layer?.backgroundColor = NSColor.tertiaryLabelColor.cgColor
+        }
+    }
+    
+    // MARK: - Méthode pour mettre à jour un item existant avec loading
+    static func updateItemLoadingState(_ item: NSMenuItem, isLoading: Bool, config: MenuItemConfig, loadingIsActive: Bool = false) {
+        guard let containerView = item.view as? HoverableView,
+              let circleView = containerView.subviews.first(where: { $0.frame.minX == circleLeftMargin }) else {
+            return
+        }
+        
+        // Vérifier si on a déjà un spinner en cours
+        let hasActiveSpinner = circleView.subviews.contains { $0 is LoadingSpinner }
+        
+        if isLoading {
+            // Si on veut du loading et qu'on a déjà un spinner actif, ne rien faire !
+            if hasActiveSpinner {
+                print("🔒 Spinner déjà actif, pas de changement")
+                return
+            }
+            
+            // Sinon, créer un nouveau spinner
+            print("🎬 Création d'un nouveau spinner")
+            
+            // Nettoyer d'abord
+            for subview in circleView.subviews {
+                if let spinner = subview as? LoadingSpinner {
+                    spinner.stopAnimating()
+                }
+                subview.removeFromSuperview()
+            }
+            
+            // Passer en mode loading avec fond approprié
+            if loadingIsActive {
+                // Fond bleu comme un élément actif
+                if #available(macOS 10.14, *) {
+                    circleView.layer?.backgroundColor = NSColor.controlAccentColor.cgColor
+                } else {
+                    circleView.layer?.backgroundColor = NSColor.systemBlue.cgColor
+                }
+            } else {
+                // Fond gris pour loading inactif
+                circleView.layer?.backgroundColor = NSColor.systemGray.cgColor
+            }
+            
+            let spinner = LoadingSpinner(frame: NSRect(x: 0, y: 0, width: circleSize, height: circleSize))
+            circleView.addSubview(spinner)
+            spinner.startAnimating()
+            
+        } else {
+            // Arrêter le loading seulement si nécessaire
+            if hasActiveSpinner {
+                print("🛑 Arrêt du spinner existant")
+                
+                // Arrêter toute animation en cours et nettoyer complètement
+                for subview in circleView.subviews {
+                    if let spinner = subview as? LoadingSpinner {
+                        spinner.stopAnimating()
+                    }
+                    subview.removeFromSuperview()
+                }
+            }
+            
+            // Retour à l'état normal
+            applyCircleColor(to: circleView, isActive: config.isActive)
+            
+            let iconView = createIconView(config: config)
+            circleView.addSubview(iconView)
         }
     }
 }

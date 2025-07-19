@@ -109,15 +109,20 @@ class MenuItemFactory {
         items.append(sortieHeader)
         
         let activeSource = state?.activeSource ?? "none"
+        let hasAnyLoading = loadingTarget != nil
         
         // Spotify
         let spotifyIsLoading = loadingStates["librespot"] ?? false
         let spotifyIsLoadingTarget = loadingTarget == "librespot"
+        // CORRECTION : Une source n'est active que si elle est active ET qu'il n'y a pas de loading en cours
+        // OU si elle est la cible du loading
+        let spotifyIsActive = spotifyIsLoadingTarget || (!hasAnyLoading && activeSource == "librespot")
+        
         items.append(CircularMenuItem.createWithLoadingSupport(
             with: MenuItemConfig(
                 title: "Spotify",
                 iconName: "music.note",
-                isActive: activeSource == "librespot" && !spotifyIsLoading,  // Pas actif si en loading
+                isActive: spotifyIsActive,
                 target: target,
                 action: action,
                 representedObject: "librespot"
@@ -129,11 +134,13 @@ class MenuItemFactory {
         // Bluetooth
         let bluetoothIsLoading = loadingStates["bluetooth"] ?? false
         let bluetoothIsLoadingTarget = loadingTarget == "bluetooth"
+        let bluetoothIsActive = bluetoothIsLoadingTarget || (!hasAnyLoading && activeSource == "bluetooth")
+        
         items.append(CircularMenuItem.createWithLoadingSupport(
             with: MenuItemConfig(
                 title: "Bluetooth",
                 iconName: "bluetooth",
-                isActive: activeSource == "bluetooth" && !bluetoothIsLoading,  // Pas actif si en loading
+                isActive: bluetoothIsActive,
                 target: target,
                 action: action,
                 representedObject: "bluetooth"
@@ -145,11 +152,13 @@ class MenuItemFactory {
         // macOS
         let rocIsLoading = loadingStates["roc"] ?? false
         let rocIsLoadingTarget = loadingTarget == "roc"
+        let rocIsActive = rocIsLoadingTarget || (!hasAnyLoading && activeSource == "roc")
+        
         items.append(CircularMenuItem.createWithLoadingSupport(
             with: MenuItemConfig(
                 title: "macOS",
                 iconName: "desktopcomputer",
-                isActive: activeSource == "roc" && !rocIsLoading,  // Pas actif si en loading
+                isActive: rocIsActive,
                 target: target,
                 action: action,
                 representedObject: "roc"

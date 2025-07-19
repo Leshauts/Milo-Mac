@@ -124,7 +124,15 @@ class LoadingSpinner: NSView {
         print("🛑 LoadingSpinner: Stopping animation")
         animationTimer?.invalidate()
         animationTimer = nil
-        currentStep = 5  // Même position de départ pour être cohérent
+        currentStep = 5  // Reset à la position de départ
+        
+        // AJOUT : Forcer l'arrêt immédiat de tous les timers actifs
+        RunLoop.main.perform {
+            // S'assurer qu'aucun timer résiduel ne continue
+            self.animationTimer?.invalidate()
+            self.animationTimer = nil
+        }
+        
         needsDisplay = true
     }
     

@@ -24,6 +24,9 @@ class CircularMenuItem {
     private static let textTopMargin: CGFloat = 8
     private static let circleLeftMargin: CGFloat = 14
     
+    // MARK: - Gestion globale des spinners
+    private static var activeSpinners: [LoadingSpinner] = []
+    
     // MARK: - Public Interface
     static func create(with config: MenuItemConfig) -> NSMenuItem {
         let item = NSMenuItem()
@@ -48,6 +51,15 @@ class CircularMenuItem {
         item.view = containerView
         
         return item
+    }
+    
+    // MARK: - Nettoyage global des spinners
+    static func cleanupAllSpinners() {
+        print("🧹 Nettoyage global de \(activeSpinners.count) spinners")
+        for spinner in activeSpinners {
+            spinner.stopAnimating()
+        }
+        activeSpinners.removeAll()
     }
     
     // MARK: - Private Methods
@@ -112,9 +124,10 @@ class CircularMenuItem {
                 circleView.layer?.backgroundColor = NSColor.systemGray.cgColor
             }
             
-            // Ajouter le spinner blanc
+            // Ajouter le spinner blanc et l'enregistrer
             let spinner = LoadingSpinner(frame: NSRect(x: 0, y: 0, width: circleSize, height: circleSize))
             circleView.addSubview(spinner)
+            activeSpinners.append(spinner) // AJOUT : Enregistrer le spinner
             spinner.startAnimating()
             
         } else {
@@ -181,28 +194,26 @@ class CircularMenuItem {
             return
         }
         
-        // Vérifier si on a déjà un spinner en cours
-        let hasActiveSpinner = circleView.subviews.contains { $0 is LoadingSpinner }
-        
-        if isLoading {
-            // Si on veut du loading et qu'on a déjà un spinner actif, ne rien faire !
-            if hasActiveSpinner {
-                print("🔒 Spinner déjà actif, pas de changement")
-                return
-            }
-            
-            // Sinon, créer un nouveau spinner
-            print("🎬 Création d'un nouveau spinner")
-            
-            // Nettoyer d'abord
-            for subview in circleView.subviews {
-                if let spinner = subview as? LoadingSpinner {
-                    spinner.stopAnimating()
+        // CORRECTION : Toujours nettoyer TOUS les spinners existants d'abord
+        for subview in circleView.subviews {
+            if let spinner = subview as? LoadingSpinner {
+                print("🧹 Nettoyage spinner existant")
+                spinner.stopAnimating()
+                // Retirer de la liste globale
+                if let index = activeSpinners.firstIndex(of: spinner) {
+                    activeSpinners.remove(at: index)
                 }
+                spinner.removeFromSuperview()
+            } else {
+                // Supprimer les autres subviews (icônes, etc.)
                 subview.removeFromSuperview()
             }
+        }
+        
+        if isLoading {
+            print("🎬 Création d'un nouveau spinner pour loading")
             
-            // Passer en mode loading avec fond approprié
+            // Définir la couleur de fond selon l'état
             if loadingIsActive {
                 // Fond bleu comme un élément actif
                 if #available(macOS 10.14, *) {
@@ -215,27 +226,19 @@ class CircularMenuItem {
                 circleView.layer?.backgroundColor = NSColor.systemGray.cgColor
             }
             
+            // Créer et ajouter le nouveau spinner
             let spinner = LoadingSpinner(frame: NSRect(x: 0, y: 0, width: circleSize, height: circleSize))
             circleView.addSubview(spinner)
+            activeSpinners.append(spinner) // AJOUT : Enregistrer le spinner
             spinner.startAnimating()
             
         } else {
-            // Arrêter le loading seulement si nécessaire
-            if hasActiveSpinner {
-                print("🛑 Arrêt du spinner existant")
-                
-                // Arrêter toute animation en cours et nettoyer complètement
-                for subview in circleView.subviews {
-                    if let spinner = subview as? LoadingSpinner {
-                        spinner.stopAnimating()
-                    }
-                    subview.removeFromSuperview()
-                }
-            }
+            print("🛑 Arrêt du loading, retour à l'icône normale")
             
             // Retour à l'état normal
             applyCircleColor(to: circleView, isActive: config.isActive)
             
+            // Ajouter l'icône normale
             let iconView = createIconView(config: config)
             circleView.addSubview(iconView)
         }

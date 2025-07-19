@@ -208,10 +208,10 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
         let oldState = loadingStates[sourceId] ?? false
         loadingStates[sourceId] = isLoading
         
-        // Mettre à jour SEULEMENT l'item spécifique, et seulement si l'état change vraiment
+        // MODIFICATION : Toujours reconstruire tout le menu pour que tous les items se mettent à jour
         if let menu = activeMenu, oldState != isLoading {
-            print("🎯 Mise à jour spécifique de l'item \(sourceId) (\(oldState) -> \(isLoading))")
-            updateSourceLoadingInMenu(menu, sourceId: sourceId, isLoading: isLoading)
+            print("🔄 Reconstruction complète du menu pour \(sourceId) (\(oldState) -> \(isLoading))")
+            updateMenuInRealTime(menu)
         } else if oldState == isLoading {
             print("🔒 Pas de mise à jour UI pour \(sourceId), état identique (\(isLoading))")
         }
@@ -229,34 +229,14 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
         }
     }
     
-    private func updateSourceLoadingInMenu(_ menu: NSMenu, sourceId: String, isLoading: Bool) {
-        // Trouver l'item correspondant au sourceId
-        for item in menu.items {
-            if let representedObject = item.representedObject as? String,
-               representedObject == sourceId {
-                
-                // Créer la config pour cet item
-                let config = getMenuItemConfig(for: sourceId)
-                let loadingIsActive = loadingTarget == sourceId
-                
-                // Mettre à jour l'état de loading
-                CircularMenuItem.updateItemLoadingState(item, isLoading: isLoading, config: config, loadingIsActive: loadingIsActive)
-                break
-            }
-        }
-    }
-    
     private func getMenuItemConfig(for sourceId: String) -> MenuItemConfig {
         let activeSource = currentState?.activeSource ?? "none"
-        let isCurrentlyLoading = loadingStates[sourceId] ?? false
-        let isLoadingTarget = loadingTarget == sourceId
         
-        // Une source est considérée active si :
+        // MODIFICATION : Une source est considérée active si :
         // - Elle est la source active actuelle
-        // - ET (pas de loading en cours OU elle est la cible du loading)
-        // - ET pas un autre plugin en cours de loading
-        let hasOtherLoading = loadingTarget != nil && loadingTarget != sourceId
-        let isActive = (activeSource == sourceId) && !hasOtherLoading && (!isCurrentlyLoading || isLoadingTarget)
+        // - ET aucun loading n'est en cours (dès qu'on clique ailleurs, l'ancienne source devient inactive)
+        let hasAnyLoading = loadingTarget != nil
+        let isActive = (activeSource == sourceId) && !hasAnyLoading
         
         switch sourceId {
         case "librespot":
@@ -320,7 +300,7 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
         // Démarrer le loading
         setLoadingState(for: sourceId, isLoading: true)
         
-        // Timer de sécurité pour arrêter le loading après 15 secondes max (augmenté pour voir)
+        // Timer de sécurité pour arrêter le loading après 15 secondes max
         loadingTimers[sourceId]?.invalidate()
         loadingTimers[sourceId] = Timer.scheduledTimer(withTimeInterval: 15.0, repeats: false) { _ in
             Task { @MainActor in
@@ -531,6 +511,9 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
     }
     
     private func updateMenuInRealTime(_ menu: NSMenu) {
+        // AJOUT : Nettoyer tous les spinners avant de reconstruire le menu
+        CircularMenuItem.cleanupAllSpinners()
+        
         menu.removeAllItems()
         
         if isOakOSConnected {

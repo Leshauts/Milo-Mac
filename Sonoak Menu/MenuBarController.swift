@@ -289,6 +289,13 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
             return
         }
         
+        // AJOUT : Empêcher le clic sur la source déjà active
+        let activeSource = currentState?.activeSource ?? "none"
+        if activeSource == sourceId {
+            print("⚠️ Source \(sourceId) déjà active, ignorer le clic")
+            return
+        }
+        
         print("🔄 Démarrage du loading pour \(sourceId)")
         
         // Définir la cible du loading pour l'affichage

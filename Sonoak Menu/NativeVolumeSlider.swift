@@ -115,6 +115,14 @@ class NativeVolumeSlider: NSSlider {
         return animation
     }
     
+    // AJOUT : Animation spécifique pour les clics sur la track
+    private func createThumbClickAnimation() -> CABasicAnimation {
+        let animation = CABasicAnimation()
+        animation.duration = 0.3  // Légèrement plus long pour les clics
+        animation.timingFunction = CAMediaTimingFunction(controlPoints: 0.25, 0.1, 0.25, 1.0)  // Easing custom fluide
+        return animation
+    }
+    
     private func addVolumeIcon() {
         guard let mainLayer = layer else { return }
         
@@ -362,7 +370,7 @@ class NativeVolumeSlider: NSSlider {
         // Les CALayers gèrent tout l'affichage
     }
     
-    private func updateLayerPositions() {
+    private func updateLayerPositions(animated: Bool = false) {
         guard layer != nil else { return }
         
         let trackY = bounds.midY - trackHeight / 2
@@ -377,16 +385,49 @@ class NativeVolumeSlider: NSSlider {
         let thumbRange = bounds.width - 2 - thumbSize
         let thumbX = 1 + (thumbRange * percentage)
         let thumbY = bounds.midY - thumbSize / 2
-        thumbLayer.frame = NSRect(x: thumbX, y: thumbY, width: thumbSize, height: thumbSize)
+        let newThumbFrame = NSRect(x: thumbX, y: thumbY, width: thumbSize, height: thumbSize)
+        
+        // AJOUT : Animation conditionnelle du thumb
+        if animated {
+            CATransaction.begin()
+            CATransaction.setAnimationDuration(0.3)
+            CATransaction.setAnimationTimingFunction(CAMediaTimingFunction(controlPoints: 0.25, 0.1, 0.25, 1.0))
+            thumbLayer.frame = newThumbFrame
+            CATransaction.commit()
+        } else {
+            thumbLayer.frame = newThumbFrame
+        }
         
         if percentage > 0 {
             let thumbCenterX = thumbX + thumbSize / 2
             let fillWidth = max(0, thumbCenterX - fixedFillStartX)
-            fillLayer.frame = NSRect(x: fixedFillStartX, y: trackY + 1, width: fillWidth, height: fillHeight)
+            let newFillFrame = NSRect(x: fixedFillStartX, y: trackY + 1, width: fillWidth, height: fillHeight)
+            
+            // AJOUT : Animation conditionnelle du fill
+            if animated {
+                CATransaction.begin()
+                CATransaction.setAnimationDuration(0.3)
+                CATransaction.setAnimationTimingFunction(CAMediaTimingFunction(controlPoints: 0.25, 0.1, 0.25, 1.0))
+                fillLayer.frame = newFillFrame
+                CATransaction.commit()
+            } else {
+                fillLayer.frame = newFillFrame
+            }
             
             print("🎯 Volume: \(Int(percentage * 100))% - FillStart: \(fixedFillStartX), Width: \(fillWidth)")
         } else {
-            fillLayer.frame = NSRect(x: fixedFillStartX, y: trackY + 1, width: 0, height: fillHeight)
+            let newFillFrame = NSRect(x: fixedFillStartX, y: trackY + 1, width: 0, height: fillHeight)
+            
+            if animated {
+                CATransaction.begin()
+                CATransaction.setAnimationDuration(0.3)
+                CATransaction.setAnimationTimingFunction(CAMediaTimingFunction(controlPoints: 0.25, 0.1, 0.25, 1.0))
+                fillLayer.frame = newFillFrame
+                CATransaction.commit()
+            } else {
+                fillLayer.frame = newFillFrame
+            }
+            
             print("🎯 Volume: 0% - Fill masqué")
         }
         
@@ -529,7 +570,7 @@ class NativeVolumeSlider: NSSlider {
         let finalValue = max(minValue, min(maxValue, newValue))
         
         doubleValue = finalValue
-        updateLayerPositions()
+        updateLayerPositions(animated: true)  // AJOUT : Animation sur les clics
         
         if let target = target, let action = action {
             NSApp.sendAction(action, to: target, from: self)
@@ -538,7 +579,7 @@ class NativeVolumeSlider: NSSlider {
     
     override func mouseUp(with event: NSEvent) {
         isThumbPressed = false
-        updateLayerPositions()
+        updateLayerPositions()  // Pas d'animation au mouseUp
     }
     
     override func mouseDragged(with event: NSEvent) {
@@ -556,7 +597,7 @@ class NativeVolumeSlider: NSSlider {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         doubleValue = finalValue
-        updateLayerPositions()
+        updateLayerPositions()  // Pas d'animation pendant le drag (trop de calls)
         CATransaction.commit()
         
         if let target = target, let action = action {

@@ -1,7 +1,8 @@
 import SwiftUI
 import AppKit
+import ServiceManagement
 
-// MARK: - Simplified MenuBarController
+// MARK: - MenuBarController
 class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDelegate {
     private var statusItem: NSStatusItem
     private var isOakOSConnected = false
@@ -11,14 +12,15 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
     private var currentState: OakOSState?
     private var currentVolume: VolumeStatus?
     private var activeMenu: NSMenu?
+    private var isPreferencesMenuActive = false
     
     private let volumeController = VolumeController()
     
-    // MARK: - Nouvelles propriétés pour le loading
+    // Loading states
     private var loadingStates: [String: Bool] = [:]
     private var loadingTimers: [String: Timer] = [:]
-    private var loadingStartTimes: [String: Date] = [:]  // Pour gérer le délai minimum
-    private var loadingTarget: String?  // Quelle source est la cible du loading
+    private var loadingStartTimes: [String: Date] = [:]
+    private var loadingTarget: String?
     
     init(statusItem: NSStatusItem) {
         self.statusItem = statusItem
@@ -30,30 +32,25 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
     }
     
     private func setupStatusItem() {
-        // Utiliser l'icône SVG personnalisée au lieu du texte
         statusItem.button?.image = createCustomIcon()
         statusItem.button?.target = self
         statusItem.button?.action = #selector(menuButtonClicked)
-        
-        // Configurer l'image pour qu'elle soit template (s'adapte au thème)
         statusItem.button?.image?.isTemplate = true
     }
     
     private func createCustomIcon() -> NSImage {
-        // Taille standard pour les icônes de menu bar macOS
         let size = NSSize(width: 22, height: 22)
         let image = NSImage(size: size)
         
         image.lockFocus()
         
-        // Convertir les coordonnées SVG (24x24) vers notre taille (22x22)
         let scale = size.width / 24.0
         let context = NSGraphicsContext.current?.cgContext
         context?.scaleBy(x: scale, y: scale)
         
-        // Dessiner le path principal (opacité 1.0)
+        // Path principal
         let path1 = NSBezierPath()
-        path1.move(to: NSPoint(x: 12.1329, y: 8.1009)) // Inverser Y pour macOS
+        path1.move(to: NSPoint(x: 12.1329, y: 8.1009))
         path1.curve(to: NSPoint(x: 18.2837, y: 10.1567),
                    controlPoint1: NSPoint(x: 13.1013, y: 9.7746),
                    controlPoint2: NSPoint(x: 15.4069, y: 10.4476))
@@ -64,11 +61,10 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
                    controlPoint2: NSPoint(x: 11.6232, y: 7.2198))
         path1.close()
         
-        // Utiliser blanc pur (#FFF) avec opacité 1.0
         NSColor.white.setFill()
         path1.fill()
         
-        // Dessiner le path 2 (opacité 0.7)
+        // Path 2
         let path2 = NSBezierPath()
         path2.move(to: NSPoint(x: 9.14838, y: 10.9704))
         path2.curve(to: NSPoint(x: 9.03931, y: 5.0013),
@@ -84,7 +80,7 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
         NSColor.white.withAlphaComponent(0.7).setFill()
         path2.fill()
         
-        // Dessiner le path 3 (opacité 0.34)
+        // Path 3
         let path3 = NSBezierPath()
         path3.move(to: NSPoint(x: 13.8436, y: 11.7358))
         path3.curve(to: NSPoint(x: 16.8089, y: 12.7154),
@@ -116,13 +112,27 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
     
     private func updateIcon() {
         DispatchQueue.main.async { [weak self] in
-            // Changer l'opacité selon l'état de connexion
             self?.statusItem.button?.alphaValue = self?.isOakOSConnected == true ? 1.0 : 0.5
         }
     }
     
     @objc private func menuButtonClicked() {
-        showMenu()
+        // Réinitialiser le menu
+        statusItem.menu = nil
+        
+        // Détecter Option + clic
+        guard let event = NSApp.currentEvent else {
+            showMenu()
+            return
+        }
+        
+        let isOptionPressed = event.modifierFlags.contains(.option)
+        
+        if isOptionPressed {
+            showPreferencesMenu()
+        } else {
+            showMenu()
+        }
     }
     
     private func showMenu() {
@@ -136,20 +146,51 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
         }
         
         activeMenu = menu
+        isPreferencesMenuActive = false
         volumeController.activeMenu = menu
-        statusItem.menu = menu
-        statusItem.button?.performClick(nil)
         
-        // Vérifier la fermeture du menu
+        // Méthode moderne sans popUpMenu
+        displayMenu(menu)
+    }
+    
+    private func showPreferencesMenu() {
+        let menu = NSMenu()
+        menu.font = NSFont.menuFont(ofSize: 13)
+        
+        if isOakOSConnected {
+            buildConnectedPreferencesMenu(menu)
+        } else {
+            buildDisconnectedMenu(menu)
+        }
+        
+        activeMenu = menu
+        isPreferencesMenuActive = true
+        
+        // Méthode moderne sans popUpMenu
+        displayMenu(menu)
+    }
+    
+    private func displayMenu(_ menu: NSMenu) {
+        // AJOUT : Activer l'app pour que les contrôles gardent leur couleur
+        NSApp.activate(ignoringOtherApps: true)
+        
+        // Assigner le menu au statusItem
+        statusItem.menu = menu
+        
+        // Simuler le clic pour ouvrir le menu
+        if let button = statusItem.button {
+            button.performClick(nil)
+        }
+        
+        // Nettoyer la référence après un délai pour éviter la persistance
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
-            if self?.statusItem.menu == nil {
-                self?.handleMenuClosed()
-            }
+            self?.statusItem.menu = nil
+            self?.monitorMenuClosure()
         }
     }
     
-    private func buildConnectedMenuWithLoading(_ menu: NSMenu) {
-        // 1. Section Volume (en premier)
+    private func buildConnectedPreferencesMenu(_ menu: NSMenu) {
+        // Volume
         let volumeItems = MenuItemFactory.createVolumeSection(
             volume: currentVolume?.volume ?? 50,
             target: self,
@@ -157,14 +198,13 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
         )
         volumeItems.forEach { menu.addItem($0) }
         
-        // Configurer le contrôleur de volume
         if let sliderItem = volumeItems.first(where: { $0.view is MenuInteractionView }),
            let sliderView = sliderItem.view as? MenuInteractionView,
            let slider = sliderView.subviews.first(where: { $0 is NSSlider }) as? NSSlider {
             volumeController.setVolumeSlider(slider)
         }
         
-        // 2. Sources audio avec support loading
+        // Sources audio
         let sourceItems = MenuItemFactory.createAudioSourcesSectionWithLoading(
             state: currentState,
             loadingStates: loadingStates,
@@ -174,7 +214,61 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
         )
         sourceItems.forEach { menu.addItem($0) }
         
-        // 3. Contrôles système (inchangé)
+        // Contrôles système
+        let systemItems = MenuItemFactory.createSystemControlsSection(
+            state: currentState,
+            target: self,
+            action: #selector(toggleClicked)
+        )
+        systemItems.forEach { menu.addItem($0) }
+        
+        // Section préférences
+        menu.addItem(NSMenuItem.separator())
+        
+        // Toggle démarrage automatique
+        let launchAtLoginItem = createSimpleToggleItem(
+            title: "Démarrer au démarrage du Mac",
+            isEnabled: isLaunchAtLoginEnabled(),
+            target: self,
+            action: #selector(toggleLaunchAtLogin)
+        )
+        menu.addItem(launchAtLoginItem)
+        
+        // Quitter
+        let quitItem = createSimpleMenuItem(
+            title: "Quitter",
+            target: self,
+            action: #selector(quitApplication)
+        )
+        menu.addItem(quitItem)
+    }
+    
+    private func buildConnectedMenuWithLoading(_ menu: NSMenu) {
+        // Volume
+        let volumeItems = MenuItemFactory.createVolumeSection(
+            volume: currentVolume?.volume ?? 50,
+            target: self,
+            action: #selector(volumeChanged)
+        )
+        volumeItems.forEach { menu.addItem($0) }
+        
+        if let sliderItem = volumeItems.first(where: { $0.view is MenuInteractionView }),
+           let sliderView = sliderItem.view as? MenuInteractionView,
+           let slider = sliderView.subviews.first(where: { $0 is NSSlider }) as? NSSlider {
+            volumeController.setVolumeSlider(slider)
+        }
+        
+        // Sources audio
+        let sourceItems = MenuItemFactory.createAudioSourcesSectionWithLoading(
+            state: currentState,
+            loadingStates: loadingStates,
+            loadingTarget: loadingTarget,
+            target: self,
+            action: #selector(sourceClickedWithLoading)
+        )
+        sourceItems.forEach { menu.addItem($0) }
+        
+        // Contrôles système
         let systemItems = MenuItemFactory.createSystemControlsSection(
             state: currentState,
             target: self,
@@ -192,28 +286,123 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
         volumeController.forceSendPendingVolume()
         volumeController.cleanup()
         activeMenu = nil
+        isPreferencesMenuActive = false
         volumeController.activeMenu = nil
     }
     
-    // MARK: - Méthodes de gestion du loading
-    private func setLoadingState(for sourceId: String, isLoading: Bool) {
-        print("🔄 setLoadingState: \(sourceId) -> \(isLoading)")
-        
-        // Éviter les mises à jour inutiles
-        if loadingStates[sourceId] == isLoading {
-            print("⚠️ État déjà à \(isLoading) pour \(sourceId), pas de mise à jour")
-            return
+    private func monitorMenuClosure() {
+        if let menu = activeMenu, menu.highlightedItem == nil {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                if self?.activeMenu?.highlightedItem == nil {
+                    self?.handleMenuClosed()
+                }
+            }
+        } else {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+                self?.monitorMenuClosure()
+            }
         }
+    }
+    
+    // MARK: - Gestion démarrage automatique
+    private func isLaunchAtLoginEnabled() -> Bool {
+        if #available(macOS 13.0, *) {
+            return SMAppService.mainApp.status == .enabled
+        } else {
+            let bundleIdentifier = Bundle.main.bundleIdentifier ?? ""
+            return SMLoginItemSetEnabled(bundleIdentifier as CFString, false)
+        }
+    }
+    
+    @objc private func toggleLaunchAtLogin() {
+        if #available(macOS 13.0, *) {
+            let service = SMAppService.mainApp
+            
+            do {
+                if service.status == .enabled {
+                    try service.unregister()
+                } else {
+                    try service.register()
+                }
+            } catch {
+                print("❌ Erreur toggle démarrage: \(error)")
+            }
+        } else {
+            let bundleIdentifier = Bundle.main.bundleIdentifier ?? ""
+            let currentStatus = isLaunchAtLoginEnabled()
+            SMLoginItemSetEnabled(bundleIdentifier as CFString, !currentStatus)
+        }
+    }
+    
+    @objc private func quitApplication() {
+        NSApplication.shared.terminate(nil)
+    }
+    
+    // MARK: - Items de menu simples
+    private func createSimpleMenuItem(title: String, target: AnyObject, action: Selector) -> NSMenuItem {
+        let item = NSMenuItem()
+        
+        let containerView = SimpleHoverableView(frame: NSRect(x: 0, y: 0, width: 300, height: 32))
+        
+        let textField = NSTextField(labelWithString: title)
+        textField.font = NSFont.menuFont(ofSize: 13)
+        textField.textColor = NSColor.labelColor
+        textField.frame = NSRect(x: 12, y: 8, width: 200, height: 16)
+        textField.isEditable = false
+        textField.isBordered = false
+        textField.backgroundColor = NSColor.clear
+        
+        containerView.addSubview(textField)
+        containerView.clickHandler = { [weak target] in
+            _ = target?.perform(action)
+        }
+        
+        item.view = containerView
+        return item
+    }
+    
+    private func createSimpleToggleItem(title: String, isEnabled: Bool, target: AnyObject, action: Selector) -> NSMenuItem {
+        let item = NSMenuItem()
+        
+        let containerView = SimpleHoverableView(frame: NSRect(x: 0, y: 0, width: 300, height: 32))
+        
+        let textField = NSTextField(labelWithString: title)
+        textField.font = NSFont.menuFont(ofSize: 13)
+        textField.textColor = NSColor.labelColor
+        textField.frame = NSRect(x: 12, y: 8, width: 200, height: 16)
+        textField.isEditable = false
+        textField.isBordered = false
+        textField.backgroundColor = NSColor.clear
+        
+        // Toggle switch petit format (26x16px)
+        let toggle = NSSwitch()
+        toggle.state = isEnabled ? .on : .off
+        toggle.frame = NSRect(x: 262, y: 8, width: 26, height: 16)
+        toggle.controlSize = .small
+        toggle.target = target
+        toggle.action = action
+        
+        containerView.addSubview(textField)
+        containerView.addSubview(toggle)
+        
+        containerView.clickHandler = {
+            toggle.state = toggle.state == .on ? .off : .on
+            _ = target.perform(action, with: toggle)
+        }
+        
+        item.view = containerView
+        return item
+    }
+    
+    // MARK: - Gestion du loading
+    private func setLoadingState(for sourceId: String, isLoading: Bool) {
+        if loadingStates[sourceId] == isLoading { return }
         
         let oldState = loadingStates[sourceId] ?? false
         loadingStates[sourceId] = isLoading
         
-        // MODIFICATION : Toujours reconstruire tout le menu pour que tous les items se mettent à jour
         if let menu = activeMenu, oldState != isLoading {
-            print("🔄 Reconstruction complète du menu pour \(sourceId) (\(oldState) -> \(isLoading))")
             updateMenuInRealTime(menu)
-        } else if oldState == isLoading {
-            print("🔒 Pas de mise à jour UI pour \(sourceId), état identique (\(isLoading))")
         }
     }
     
@@ -223,58 +412,8 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
         loadingTimers[sourceId] = nil
         loadingStartTimes[sourceId] = nil
         
-        // Reset la cible du loading si c'est cette source
         if loadingTarget == sourceId {
             loadingTarget = nil
-        }
-    }
-    
-    private func getMenuItemConfig(for sourceId: String) -> MenuItemConfig {
-        let activeSource = currentState?.activeSource ?? "none"
-        
-        // MODIFICATION : Une source est considérée active si :
-        // - Elle est la source active actuelle
-        // - ET aucun loading n'est en cours (dès qu'on clique ailleurs, l'ancienne source devient inactive)
-        let hasAnyLoading = loadingTarget != nil
-        let isActive = (activeSource == sourceId) && !hasAnyLoading
-        
-        switch sourceId {
-        case "librespot":
-            return MenuItemConfig(
-                title: "Spotify",
-                iconName: "music.note",
-                isActive: isActive,
-                target: self,
-                action: #selector(sourceClickedWithLoading),
-                representedObject: "librespot"
-            )
-        case "bluetooth":
-            return MenuItemConfig(
-                title: "Bluetooth",
-                iconName: "bluetooth",
-                isActive: isActive,
-                target: self,
-                action: #selector(sourceClickedWithLoading),
-                representedObject: "bluetooth"
-            )
-        case "roc":
-            return MenuItemConfig(
-                title: "macOS",
-                iconName: "desktopcomputer",
-                isActive: isActive,
-                target: self,
-                action: #selector(sourceClickedWithLoading),
-                representedObject: "roc"
-            )
-        default:
-            return MenuItemConfig(
-                title: "Unknown",
-                iconName: "music.note",
-                isActive: false,
-                target: self,
-                action: #selector(sourceClickedWithLoading),
-                representedObject: sourceId
-            )
         }
     }
     
@@ -283,35 +422,18 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
         guard let apiService = apiService,
               let sourceId = sender.representedObject as? String else { return }
         
-        // Empêcher les clics multiples si déjà en loading
-        if loadingStates[sourceId] == true {
-            print("⚠️ Source \(sourceId) déjà en loading, ignorer le clic")
-            return
-        }
+        if loadingStates[sourceId] == true { return }
         
-        // AJOUT : Empêcher le clic sur la source déjà active
         let activeSource = currentState?.activeSource ?? "none"
-        if activeSource == sourceId {
-            print("⚠️ Source \(sourceId) déjà active, ignorer le clic")
-            return
-        }
+        if activeSource == sourceId { return }
         
-        print("🔄 Démarrage du loading pour \(sourceId)")
-        
-        // Définir la cible du loading pour l'affichage
         loadingTarget = sourceId
-        
-        // Enregistrer l'heure de début
         loadingStartTimes[sourceId] = Date()
-        
-        // Démarrer le loading
         setLoadingState(for: sourceId, isLoading: true)
         
-        // Timer de sécurité pour arrêter le loading après 15 secondes max
         loadingTimers[sourceId]?.invalidate()
         loadingTimers[sourceId] = Timer.scheduledTimer(withTimeInterval: 15.0, repeats: false) { _ in
             Task { @MainActor in
-                print("⏱️ Timeout loading pour \(sourceId)")
                 self.stopLoadingForSource(sourceId)
             }
         }
@@ -319,12 +441,8 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
         Task {
             do {
                 try await apiService.changeSource(sourceId)
-                print("✅ API call réussie pour \(sourceId)")
             } catch {
-                print("❌ Erreur changement source: \(error)")
-                // Arrêter le loading en cas d'erreur
                 await MainActor.run {
-                    print("❌ Arrêt du loading suite à l'erreur pour \(sourceId)")
                     self.stopLoadingForSource(sourceId)
                 }
             }
@@ -437,7 +555,6 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
         currentState = nil
         currentVolume = nil
         
-        // Nettoyer les états de loading
         for (sourceId, _) in loadingStates {
             loadingStates[sourceId] = false
             loadingTimers[sourceId]?.invalidate()
@@ -456,50 +573,30 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
     
     // MARK: - WebSocketServiceDelegate
     func didReceiveStateUpdate(_ state: OakOSState) {
-        print("📡 État reçu: activeSource=\(state.activeSource), transitioning=\(state.isTransitioning)")
         currentState = state
         
-        // Ne stopper le loading que si la transition est terminée ET la source a changé
         if !state.isTransitioning {
             for (sourceId, isLoading) in loadingStates {
-                if isLoading {
-                    print("🔍 Checking loading state for \(sourceId), current active: \(state.activeSource)")
-                    // Vérifier si cette source est maintenant active (transition réussie)
-                    if state.activeSource == sourceId {
-                        // Transition réussie, mais respecter le délai minimum
-                        let startTime = loadingStartTimes[sourceId] ?? Date()
-                        let elapsed = Date().timeIntervalSince(startTime)
-                        let minimumDuration: TimeInterval = 1.0  // 1 seconde minimum
-                        
-                        if elapsed >= minimumDuration {
-                            // Délai minimum écoulé, arrêter immédiatement
-                            print("✅ Transition réussie vers \(sourceId), arrêt du loading (délai écoulé)")
-                            stopLoadingForSource(sourceId)
-                        } else {
-                            // Attendre le délai minimum
-                            let remainingTime = minimumDuration - elapsed
-                            print("⏱️ Attendre \(remainingTime)s avant d'arrêter le loading pour \(sourceId)")
-                            
-                            DispatchQueue.main.asyncAfter(deadline: .now() + remainingTime) { [weak self] in
-                                print("✅ Délai minimum écoulé, arrêt du loading pour \(sourceId)")
-                                self?.stopLoadingForSource(sourceId)
-                            }
+                if isLoading && state.activeSource == sourceId {
+                    let startTime = loadingStartTimes[sourceId] ?? Date()
+                    let elapsed = Date().timeIntervalSince(startTime)
+                    let minimumDuration: TimeInterval = 1.0
+                    
+                    if elapsed >= minimumDuration {
+                        stopLoadingForSource(sourceId)
+                    } else {
+                        let remainingTime = minimumDuration - elapsed
+                        DispatchQueue.main.asyncAfter(deadline: .now() + remainingTime) { [weak self] in
+                            self?.stopLoadingForSource(sourceId)
                         }
                     }
-                    // Sinon, laisser le loading continuer (cas d'échec, géré par le timer de sécurité)
                 }
             }
-        } else {
-            print("⏳ Transition en cours, loading continue...")
         }
         
-        // NE PAS recréer le menu pendant un loading !
         let hasActiveLoading = loadingStates.values.contains(true)
         if let menu = activeMenu, !hasActiveLoading {
-            print("🔄 Mise à jour du menu (pas de loading actif)")
             updateMenuInRealTime(menu)
-        } else if hasActiveLoading {
-            print("⏸️ Loading en cours, menu non recréé pour préserver l'animation")
         }
     }
     
@@ -509,24 +606,105 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
         volumeController.updateSliderFromWebSocket(volume.volume)
     }
     
-    func webSocketDidConnect() {
-        // Connexion établie
-    }
-    
-    func webSocketDidDisconnect() {
-        // Connexion perdue
-    }
+    func webSocketDidConnect() {}
+    func webSocketDidDisconnect() {}
     
     private func updateMenuInRealTime(_ menu: NSMenu) {
-        // AJOUT : Nettoyer tous les spinners avant de reconstruire le menu
         CircularMenuItem.cleanupAllSpinners()
         
         menu.removeAllItems()
         
         if isOakOSConnected {
-            buildConnectedMenuWithLoading(menu)
+            if isPreferencesMenuActive {
+                buildConnectedPreferencesMenu(menu)
+            } else {
+                buildConnectedMenuWithLoading(menu)
+            }
         } else {
             buildDisconnectedMenu(menu)
         }
+    }
+}
+
+// MARK: - Simple Hoverable View
+class SimpleHoverableView: NSView {
+    var clickHandler: (() -> Void)?
+    private var trackingArea: NSTrackingArea?
+    private var hoverBackgroundLayer: CALayer?
+    
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        setupView()
+    }
+    
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        setupView()
+    }
+    
+    private func setupView() {
+        wantsLayer = true
+        setupTrackingArea()
+        
+        hoverBackgroundLayer = CALayer()
+        hoverBackgroundLayer?.frame = NSRect(x: 5, y: 0, width: bounds.width - 10, height: bounds.height)
+        hoverBackgroundLayer?.cornerRadius = 6
+        hoverBackgroundLayer?.backgroundColor = NSColor.clear.cgColor
+        
+        layer?.insertSublayer(hoverBackgroundLayer!, at: 0)
+    }
+    
+    private func setupTrackingArea() {
+        let options: NSTrackingArea.Options = [
+            .mouseEnteredAndExited,
+            .activeAlways,
+            .inVisibleRect
+        ]
+        
+        trackingArea = NSTrackingArea(rect: bounds, options: options, owner: self, userInfo: nil)
+        addTrackingArea(trackingArea!)
+    }
+    
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        
+        if let trackingArea = trackingArea {
+            removeTrackingArea(trackingArea)
+        }
+        
+        setupTrackingArea()
+    }
+    
+    override func mouseEntered(with event: NSEvent) {
+        super.mouseEntered(with: event)
+        
+        let hoverColor: NSColor
+        if #available(macOS 10.14, *) {
+            hoverColor = NSColor.tertiaryLabelColor
+        } else {
+            hoverColor = NSColor.lightGray.withAlphaComponent(0.2)
+        }
+        
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        hoverBackgroundLayer?.backgroundColor = hoverColor.cgColor
+        CATransaction.commit()
+    }
+    
+    override func mouseExited(with event: NSEvent) {
+        super.mouseExited(with: event)
+        
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        hoverBackgroundLayer?.backgroundColor = NSColor.clear.cgColor
+        CATransaction.commit()
+    }
+    
+    override func mouseDown(with event: NSEvent) {
+        clickHandler?()
+    }
+    
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        return bounds.contains(point) ? self : nil
     }
 }

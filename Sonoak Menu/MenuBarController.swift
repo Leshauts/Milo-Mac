@@ -160,7 +160,7 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
         if isOakOSConnected {
             buildConnectedPreferencesMenu(menu)
         } else {
-            buildDisconnectedMenu(menu)
+            buildDisconnectedPreferencesMenu(menu)  // CORRECTION : Menu préférences même déconnecté
         }
         
         activeMenu = menu
@@ -280,6 +280,33 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
     private func buildDisconnectedMenu(_ menu: NSMenu) {
         let disconnectedItem = MenuItemFactory.createDisconnectedItem()
         menu.addItem(disconnectedItem)
+    }
+    
+    // AJOUT : Menu préférences quand oakOS est déconnecté
+    private func buildDisconnectedPreferencesMenu(_ menu: NSMenu) {
+        // Message de déconnexion
+        let disconnectedItem = MenuItemFactory.createDisconnectedItem()
+        menu.addItem(disconnectedItem)
+        
+        // Section préférences même déconnecté
+        menu.addItem(NSMenuItem.separator())
+        
+        // Toggle démarrage automatique (toujours accessible)
+        let launchAtLoginItem = createSimpleToggleItem(
+            title: "Démarrer au démarrage du Mac",
+            isEnabled: isLaunchAtLoginEnabled(),
+            target: self,
+            action: #selector(toggleLaunchAtLogin)
+        )
+        menu.addItem(launchAtLoginItem)
+        
+        // Quitter (toujours accessible)
+        let quitItem = createSimpleMenuItem(
+            title: "Quitter",
+            target: self,
+            action: #selector(quitApplication)
+        )
+        menu.addItem(quitItem)
     }
     
     private func handleMenuClosed() {
@@ -621,7 +648,11 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
                 buildConnectedMenuWithLoading(menu)
             }
         } else {
-            buildDisconnectedMenu(menu)
+            if isPreferencesMenuActive {
+                buildDisconnectedPreferencesMenu(menu)  // CORRECTION : Préférences même déconnecté
+            } else {
+                buildDisconnectedMenu(menu)
+            }
         }
     }
 }

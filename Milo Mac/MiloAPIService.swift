@@ -19,7 +19,7 @@ class MiloAPIService {
     private let baseURL: String
     private let session = URLSession.shared
     
-    init(host: String, port: Int = 8000) {
+    init(host: String, port: Int = 80) {  // Changé de 8000 à 80
         self.baseURL = "http://\(host):\(port)"
     }
     

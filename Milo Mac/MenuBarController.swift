@@ -3,10 +3,10 @@ import AppKit
 import ServiceManagement
 
 // MARK: - MenuBarController
-class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDelegate {
+class MenuBarController: NSObject, MiloConnectionDelegate, WebSocketServiceDelegate {
     private var statusItem: NSStatusItem
     private var isMiloConnected = false
-    private var bonjourService: BonjourService!
+    private var connectionService: MiloConnectionService!
     private var apiService: MiloAPIService?
     private var webSocketService: WebSocketService!
     private var currentState: MiloState?
@@ -53,8 +53,8 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
     }
     
     private func setupServices() {
-        bonjourService = BonjourService()
-        bonjourService.delegate = self
+        connectionService = MiloConnectionService()
+        connectionService.delegate = self
         
         webSocketService = WebSocketService()
         webSocketService.delegate = self
@@ -112,7 +112,7 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
         if isMiloConnected {
             buildConnectedPreferencesMenu(menu)
         } else {
-            buildDisconnectedPreferencesMenu(menu)  // CORRECTION : Menu préférences même déconnecté
+            buildDisconnectedPreferencesMenu(menu)
         }
         
         activeMenu = menu
@@ -483,24 +483,24 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
         }
     }
     
-    // MARK: - BonjourServiceDelegate
-    func MiloFound(name: String, host: String, port: Int) {
+    // MARK: - MiloConnectionDelegate
+    func miloFound(host: String, port: Int) {
         if isMiloConnected { return }
-        waitForServiceReady(name: name, host: host, port: port)
+        waitForServiceReady(host: host, port: port)
     }
     
-    private func waitForServiceReady(name: String, host: String, port: Int, attempt: Int = 1) {
+    private func waitForServiceReady(host: String, port: Int, attempt: Int = 1) {
         let maxAttempts = 10
         let apiService = MiloAPIService(host: host, port: port)
         
         Task { @MainActor in
             do {
                 _ = try await apiService.fetchState()
-                self.connectToMilo(name: name, host: host, port: port)
+                self.connectToMilo(host: host, port: port)
             } catch {
                 if attempt < maxAttempts {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
-                        self?.waitForServiceReady(name: name, host: host, port: port, attempt: attempt + 1)
+                        self?.waitForServiceReady(host: host, port: port, attempt: attempt + 1)
                     }
                 } else {
                     NSLog("❌ Service non accessible après \(maxAttempts) tentatives")
@@ -509,7 +509,7 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
         }
     }
     
-    private func connectToMilo(name: String, host: String, port: Int) {
+    private func connectToMilo(host: String, port: Int) {
         isMiloConnected = true
         updateIcon()
         
@@ -524,7 +524,7 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
         }
     }
     
-    func MiloLost() {
+    func miloLost() {
         if !isMiloConnected { return }
         
         isMiloConnected = false
@@ -601,7 +601,7 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
             }
         } else {
             if isPreferencesMenuActive {
-                buildDisconnectedPreferencesMenu(menu)  // CORRECTION : Préférences même déconnecté
+                buildDisconnectedPreferencesMenu(menu)
             } else {
                 buildDisconnectedMenu(menu)
             }

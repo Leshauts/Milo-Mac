@@ -1,13 +1,9 @@
-//
-//  Sonoak_MenuUITests.swift
-//  Sonoak MenuUITests
-//
 //  Created by Léo Durand on 11/07/2025.
 //
 
 import XCTest
 
-final class Sonoak_MenuUITests: XCTestCase {
+final class Milo_MacUITests: XCTestCase {
 
     override func setUpWithError() throws {
         // Put setup code here. This method is called before the invocation of each test method in the class.

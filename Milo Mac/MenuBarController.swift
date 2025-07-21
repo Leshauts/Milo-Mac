@@ -5,11 +5,11 @@ import ServiceManagement
 // MARK: - MenuBarController
 class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDelegate {
     private var statusItem: NSStatusItem
-    private var isOakOSConnected = false
+    private var isMiloConnected = false
     private var bonjourService: BonjourService!
-    private var apiService: OakOSAPIService?
+    private var apiService: MiloAPIService?
     private var webSocketService: WebSocketService!
-    private var currentState: OakOSState?
+    private var currentState: MiloState?
     private var currentVolume: VolumeStatus?
     private var activeMenu: NSMenu?
     private var isPreferencesMenuActive = false
@@ -112,7 +112,7 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
     
     private func updateIcon() {
         DispatchQueue.main.async { [weak self] in
-            self?.statusItem.button?.alphaValue = self?.isOakOSConnected == true ? 1.0 : 0.5
+            self?.statusItem.button?.alphaValue = self?.isMiloConnected == true ? 1.0 : 0.5
         }
     }
     
@@ -139,7 +139,7 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
         let menu = NSMenu()
         menu.font = NSFont.menuFont(ofSize: 13)
         
-        if isOakOSConnected {
+        if isMiloConnected {
             buildConnectedMenuWithLoading(menu)
         } else {
             buildDisconnectedMenu(menu)
@@ -157,7 +157,7 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
         let menu = NSMenu()
         menu.font = NSFont.menuFont(ofSize: 13)
         
-        if isOakOSConnected {
+        if isMiloConnected {
             buildConnectedPreferencesMenu(menu)
         } else {
             buildDisconnectedPreferencesMenu(menu)  // CORRECTION : Menu préférences même déconnecté
@@ -282,7 +282,7 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
         menu.addItem(disconnectedItem)
     }
     
-    // AJOUT : Menu préférences quand oakOS est déconnecté
+    // AJOUT : Menu préférences quand Milo est déconnecté
     private func buildDisconnectedPreferencesMenu(_ menu: NSMenu) {
         // Message de déconnexion
         let disconnectedItem = MenuItemFactory.createDisconnectedItem()
@@ -532,19 +532,19 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
     }
     
     // MARK: - BonjourServiceDelegate
-    func oakOSFound(name: String, host: String, port: Int) {
-        if isOakOSConnected { return }
+    func MiloFound(name: String, host: String, port: Int) {
+        if isMiloConnected { return }
         waitForServiceReady(name: name, host: host, port: port)
     }
     
     private func waitForServiceReady(name: String, host: String, port: Int, attempt: Int = 1) {
         let maxAttempts = 10
-        let apiService = OakOSAPIService(host: host, port: port)
+        let apiService = MiloAPIService(host: host, port: port)
         
         Task { @MainActor in
             do {
                 _ = try await apiService.fetchState()
-                self.connectToOakOS(name: name, host: host, port: port)
+                self.connectToMilo(name: name, host: host, port: port)
             } catch {
                 if attempt < maxAttempts {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
@@ -557,11 +557,11 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
         }
     }
     
-    private func connectToOakOS(name: String, host: String, port: Int) {
-        isOakOSConnected = true
+    private func connectToMilo(name: String, host: String, port: Int) {
+        isMiloConnected = true
         updateIcon()
         
-        apiService = OakOSAPIService(host: host, port: port)
+        apiService = MiloAPIService(host: host, port: port)
         volumeController.apiService = apiService
         
         webSocketService.connect(to: host, port: port)
@@ -572,10 +572,10 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
         }
     }
     
-    func oakOSLost() {
-        if !isOakOSConnected { return }
+    func MiloLost() {
+        if !isMiloConnected { return }
         
-        isOakOSConnected = false
+        isMiloConnected = false
         updateIcon()
         apiService = nil
         volumeController.apiService = nil
@@ -599,7 +599,7 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
     }
     
     // MARK: - WebSocketServiceDelegate
-    func didReceiveStateUpdate(_ state: OakOSState) {
+    func didReceiveStateUpdate(_ state: MiloState) {
         currentState = state
         
         if !state.isTransitioning {
@@ -641,7 +641,7 @@ class MenuBarController: NSObject, BonjourServiceDelegate, WebSocketServiceDeleg
         
         menu.removeAllItems()
         
-        if isOakOSConnected {
+        if isMiloConnected {
             if isPreferencesMenuActive {
                 buildConnectedPreferencesMenu(menu)
             } else {

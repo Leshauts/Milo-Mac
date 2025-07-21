@@ -29,7 +29,7 @@ class MenuItemFactory {
     
     // MARK: - Disconnected State
     static func createDisconnectedItem() -> NSMenuItem {
-        let item = NSMenuItem(title: "Sonoak n'est pas allumé", action: nil, keyEquivalent: "")
+        let item = NSMenuItem(title: "Milo n'est pas allumé", action: nil, keyEquivalent: "")
         item.isEnabled = false
         return item
     }
@@ -53,7 +53,7 @@ class MenuItemFactory {
         let item = NSMenuItem()
         let headerView = NSView(frame: NSRect(x: 0, y: 0, width: containerWidth, height: 28))
         
-        let titleLabel = NSTextField(labelWithString: "Volume Sonoak")
+        let titleLabel = NSTextField(labelWithString: "Volume Milo")
         titleLabel.font = NSFont.systemFont(ofSize: 13, weight: .semibold)
         titleLabel.textColor = NSColor.labelColor
         titleLabel.frame = NSRect(x: 12, y: 4, width: 160, height: 16)
@@ -84,7 +84,7 @@ class MenuItemFactory {
     }
     
     // MARK: - Audio Sources Section (version originale)
-    static func createAudioSourcesSection(state: OakOSState?, target: AnyObject, action: Selector) -> [NSMenuItem] {
+    static func createAudioSourcesSection(state: MiloState?, target: AnyObject, action: Selector) -> [NSMenuItem] {
         return createAudioSourcesSectionWithLoading(
             state: state,
             loadingStates: [:],
@@ -96,7 +96,7 @@ class MenuItemFactory {
     
     // MARK: - Audio Sources Section (avec support loading)
     static func createAudioSourcesSectionWithLoading(
-        state: OakOSState?,
+        state: MiloState?,
         loadingStates: [String: Bool],
         loadingTarget: String?,  // Quelle source est en cours de loading
         target: AnyObject,
@@ -173,7 +173,7 @@ class MenuItemFactory {
     }
     
     // MARK: - System Controls Section
-    static func createSystemControlsSection(state: OakOSState?, target: AnyObject, action: Selector) -> [NSMenuItem] {
+    static func createSystemControlsSection(state: MiloState?, target: AnyObject, action: Selector) -> [NSMenuItem] {
         var items: [NSMenuItem] = []
         
         // Titre secondaire "Fonctionnalités"

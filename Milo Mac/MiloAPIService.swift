@@ -1,6 +1,6 @@
 import Foundation
 
-struct OakOSState {
+struct MiloState {
     let activeSource: String
     let pluginState: String
     let isTransitioning: Bool
@@ -15,7 +15,7 @@ struct VolumeStatus {
     let multiroomEnabled: Bool
 }
 
-class OakOSAPIService {
+class MiloAPIService {
     private let baseURL: String
     private let session = URLSession.shared
     
@@ -23,7 +23,7 @@ class OakOSAPIService {
         self.baseURL = "http://\(host):\(port)"
     }
     
-    func fetchState() async throws -> OakOSState {
+    func fetchState() async throws -> MiloState {
         guard let url = URL(string: "\(baseURL)/api/audio/state") else {
             throw APIError.invalidURL
         }
@@ -39,7 +39,7 @@ class OakOSAPIService {
             throw APIError.invalidResponse
         }
         
-        return OakOSState(
+        return MiloState(
             activeSource: json["active_source"] as? String ?? "none",
             pluginState: json["plugin_state"] as? String ?? "inactive",
             isTransitioning: json["transitioning"] as? Bool ?? false,

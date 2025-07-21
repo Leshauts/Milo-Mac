@@ -2,7 +2,7 @@ import AppKit
 import Foundation
 
 class VolumeController {
-    weak var apiService: OakOSAPIService?
+    weak var apiService: MiloAPIService?
     weak var activeMenu: NSMenu?
     
     private var pendingVolume: Int?

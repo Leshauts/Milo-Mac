@@ -1,13 +1,9 @@
-//
-//  Sonoak_MenuUITestsLaunchTests.swift
-//  Sonoak MenuUITests
-//
 //  Created by Léo Durand on 11/07/2025.
 //
 
 import XCTest
 
-final class Sonoak_MenuUITestsLaunchTests: XCTestCase {
+final class SMilo_MacUITestsLaunchTests: XCTestCase {
 
     override class var runsForEachTargetApplicationUIConfiguration: Bool {
         true

@@ -2,7 +2,7 @@ import Foundation
 import Network
 
 protocol WebSocketServiceDelegate: AnyObject {
-    func didReceiveStateUpdate(_ state: OakOSState)
+    func didReceiveStateUpdate(_ state: MiloState)
     func didReceiveVolumeUpdate(_ volume: VolumeStatus)
     func webSocketDidConnect()
     func webSocketDidDisconnect()
@@ -108,16 +108,16 @@ class WebSocketService: NSObject {
         
         print("📡 WebSocket message: \(json)")
         
-        // Parser les messages oakOS WebSocket
+        // Parser les messages Milo WebSocket
         if let category = json["category"] as? String,
            let eventType = json["type"] as? String,
            let eventData = json["data"] as? [String: Any] {
             
-            handleOakOSEvent(category: category, type: eventType, data: eventData)
+            handleMiloEvent(category: category, type: eventType, data: eventData)
         }
     }
     
-    private func handleOakOSEvent(category: String, type: String, data: [String: Any]) {
+    private func handleMiloEvent(category: String, type: String, data: [String: Any]) {
         DispatchQueue.main.async { [weak self] in
             switch category {
             case "system":
@@ -145,7 +145,7 @@ class WebSocketService: NSObject {
         // Extraire l'état complet depuis full_state
         guard let fullState = data["full_state"] as? [String: Any] else { return }
         
-        let state = OakOSState(
+        let state = MiloState(
             activeSource: fullState["active_source"] as? String ?? "none",
             pluginState: fullState["plugin_state"] as? String ?? "inactive",
             isTransitioning: fullState["transitioning"] as? Bool ?? false,

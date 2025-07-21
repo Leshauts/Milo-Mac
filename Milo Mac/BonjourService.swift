@@ -4,7 +4,7 @@ import Network
 class BonjourService: NSObject, ObservableObject {
     private var browser: NWBrowser?
     private var isSearching = false
-    private var oakOSServiceName: String?
+    private var MiloServiceName: String?
     
     weak var delegate: BonjourServiceDelegate?
     
@@ -63,11 +63,11 @@ class BonjourService: NSObject, ObservableObject {
                 case .changed(_, let new, _):
                     print("📝 Service changed: \(new)")
                     
-                    // Vérifier si c'est un service oakOS qui revient
+                    // Vérifier si c'est un service Milo qui revient
                     if case let .service(name, _, _, _) = new.endpoint {
-                        if self?.isOakOSService(name) == true && self?.oakOSServiceName == nil {
-                            print("🔄 oakOS service reconnected via changed event: \(name)")
-                            self?.oakOSServiceName = name
+                        if self?.isMiloService(name) == true && self?.MiloServiceName == nil {
+                            print("🔄 Milo service reconnected via changed event: \(name)")
+                            self?.MiloServiceName = name
                             self?.resolveAndConnect(new)
                         }
                     }
@@ -88,17 +88,17 @@ class BonjourService: NSObject, ObservableObject {
         if case let .service(name, _, _, _) = result.endpoint {
             NSLog("➕ Service detected: \(name)")
             
-            // Chercher oakOS dans le nom du service
-            if isOakOSService(name) {
-                NSLog("✅ oakOS service found: \(name)")
+            // Chercher Milo dans le nom du service
+            if isMiloService(name) {
+                NSLog("✅ Milo service found: \(name)")
                 
                 // Toujours connecter si on n'a pas de service actuel
-                if oakOSServiceName == nil {
-                    NSLog("🔄 Connecting to oakOS service: \(name)")
-                    oakOSServiceName = name
+                if MiloServiceName == nil {
+                    NSLog("🔄 Connecting to Milo service: \(name)")
+                    MiloServiceName = name
                     resolveAndConnect(result)
                 } else {
-                    NSLog("⚠️ oakOS service already connected: \(oakOSServiceName!)")
+                    NSLog("⚠️ Milo service already connected: \(MiloServiceName!)")
                 }
             }
         }
@@ -108,20 +108,22 @@ class BonjourService: NSObject, ObservableObject {
         if case let .service(name, _, _, _) = result.endpoint {
             NSLog("➖ Service removed: \(name)")
             
-            // Vérifier si c'est notre service oakOS qui a disparu
-            if let currentService = oakOSServiceName, currentService == name {
-                NSLog("❌ Our oakOS service disappeared: \(name)")
-                oakOSServiceName = nil
-                delegate?.oakOSLost()
+            // Vérifier si c'est notre service Milo qui a disparu
+            if let currentService = MiloServiceName, currentService == name {
+                NSLog("❌ Our Milo service disappeared: \(name)")
+                MiloServiceName = nil
+                delegate?.MiloLost()
             }
         }
     }
     
-    private func isOakOSService(_ name: String) -> Bool {
+    private func isMiloService(_ name: String) -> Bool {
         let nameLower = name.lowercased()
-        return nameLower.contains("oakos") ||
+        return nameLower.contains("Milo") ||
                nameLower.contains("oak") ||
+               nameLower.contains("milo") ||
                nameLower.contains("sonoak")
+        
     }
     
     private func resolveAndConnect(_ result: NWBrowser.Result) {
@@ -131,7 +133,7 @@ class BonjourService: NSObject, ObservableObject {
             // Utiliser directement l'IP connue et le port 8000
             // La résolution Bonjour a des problèmes avec les ports
             NSLog("🔄 Using fallback IP and port")
-            delegate?.oakOSFound(name: name, host: "192.168.1.188", port: 8000)
+            delegate?.MiloFound(name: name, host: "192.168.1.188", port: 8000)
         }
     }
     
@@ -160,7 +162,7 @@ class BonjourService: NSObject, ObservableObject {
         browser?.cancel()
         browser = nil
         isSearching = false
-        oakOSServiceName = nil
+        MiloServiceName = nil
     }
     
     deinit {
@@ -169,6 +171,6 @@ class BonjourService: NSObject, ObservableObject {
 }
 
 protocol BonjourServiceDelegate: AnyObject {
-    func oakOSFound(name: String, host: String, port: Int)
-    func oakOSLost()
+    func MiloFound(name: String, host: String, port: Int)
+    func MiloLost()
 }

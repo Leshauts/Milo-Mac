@@ -29,25 +29,25 @@
 
 /* Begin PBXFileReference section */
 		B39E9F442E28EF8F00CDCA62 /* .gitignore */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitignore; sourceTree = "<group>"; };
-		B3A7E0552E216D2400785117 /* Sonoak Menu.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Sonoak Menu.app"; sourceTree = BUILT_PRODUCTS_DIR; };
-		B3A7E0632E216D2500785117 /* Sonoak MenuTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Sonoak MenuTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
-		B3A7E06D2E216D2500785117 /* Sonoak MenuUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Sonoak MenuUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		B3A7E0552E216D2400785117 /* Milo Mac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Milo Mac.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		B3A7E0632E216D2500785117 /* Milo MacTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Milo MacTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		B3A7E06D2E216D2500785117 /* Milo MacUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Milo MacUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		B3A7E0572E216D2400785117 /* Sonoak Menu */ = {
+		B3A7E0572E216D2400785117 /* Milo Mac */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "Sonoak Menu";
+			path = "Milo Mac";
 			sourceTree = "<group>";
 		};
-		B3A7E0662E216D2500785117 /* Sonoak MenuTests */ = {
+		B3A7E0662E216D2500785117 /* Milo MacTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "Sonoak MenuTests";
+			path = "Milo MacTests";
 			sourceTree = "<group>";
 		};
-		B3A7E0702E216D2500785117 /* Sonoak MenuUITests */ = {
+		B3A7E0702E216D2500785117 /* Milo MacUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "Sonoak MenuUITests";
+			path = "Milo MacUITests";
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -80,9 +80,9 @@
 		B3A7E04C2E216D2400785117 = {
 			isa = PBXGroup;
 			children = (
-				B3A7E0572E216D2400785117 /* Sonoak Menu */,
-				B3A7E0662E216D2500785117 /* Sonoak MenuTests */,
-				B3A7E0702E216D2500785117 /* Sonoak MenuUITests */,
+				B3A7E0572E216D2400785117 /* Milo Mac */,
+				B3A7E0662E216D2500785117 /* Milo MacTests */,
+				B3A7E0702E216D2500785117 /* Milo MacUITests */,
 				B3A7E0562E216D2400785117 /* Products */,
 				B39E9F442E28EF8F00CDCA62 /* .gitignore */,
 			);
@@ -91,9 +91,9 @@
 		B3A7E0562E216D2400785117 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				B3A7E0552E216D2400785117 /* Sonoak Menu.app */,
-				B3A7E0632E216D2500785117 /* Sonoak MenuTests.xctest */,
-				B3A7E06D2E216D2500785117 /* Sonoak MenuUITests.xctest */,
+				B3A7E0552E216D2400785117 /* Milo Mac.app */,
+				B3A7E0632E216D2500785117 /* Milo MacTests.xctest */,
+				B3A7E06D2E216D2500785117 /* Milo MacUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -101,9 +101,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		B3A7E0542E216D2400785117 /* Sonoak Menu */ = {
+		B3A7E0542E216D2400785117 /* Milo Mac */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = B3A7E0772E216D2600785117 /* Build configuration list for PBXNativeTarget "Sonoak Menu" */;
+			buildConfigurationList = B3A7E0772E216D2600785117 /* Build configuration list for PBXNativeTarget "Milo Mac" */;
 			buildPhases = (
 				B3A7E0512E216D2400785117 /* Sources */,
 				B3A7E0522E216D2400785117 /* Frameworks */,
@@ -114,18 +114,18 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				B3A7E0572E216D2400785117 /* Sonoak Menu */,
+				B3A7E0572E216D2400785117 /* Milo Mac */,
 			);
-			name = "Sonoak Menu";
+			name = "Milo Mac";
 			packageProductDependencies = (
 			);
 			productName = "Sonoak Menu";
-			productReference = B3A7E0552E216D2400785117 /* Sonoak Menu.app */;
+			productReference = B3A7E0552E216D2400785117 /* Milo Mac.app */;
 			productType = "com.apple.product-type.application";
 		};
-		B3A7E0622E216D2500785117 /* Sonoak MenuTests */ = {
+		B3A7E0622E216D2500785117 /* Milo MacTests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = B3A7E07A2E216D2600785117 /* Build configuration list for PBXNativeTarget "Sonoak MenuTests" */;
+			buildConfigurationList = B3A7E07A2E216D2600785117 /* Build configuration list for PBXNativeTarget "Milo MacTests" */;
 			buildPhases = (
 				B3A7E05F2E216D2500785117 /* Sources */,
 				B3A7E0602E216D2500785117 /* Frameworks */,
@@ -137,18 +137,18 @@
 				B3A7E0652E216D2500785117 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				B3A7E0662E216D2500785117 /* Sonoak MenuTests */,
+				B3A7E0662E216D2500785117 /* Milo MacTests */,
 			);
-			name = "Sonoak MenuTests";
+			name = "Milo MacTests";
 			packageProductDependencies = (
 			);
 			productName = "Sonoak MenuTests";
-			productReference = B3A7E0632E216D2500785117 /* Sonoak MenuTests.xctest */;
+			productReference = B3A7E0632E216D2500785117 /* Milo MacTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		B3A7E06C2E216D2500785117 /* Sonoak MenuUITests */ = {
+		B3A7E06C2E216D2500785117 /* Milo MacUITests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = B3A7E07D2E216D2600785117 /* Build configuration list for PBXNativeTarget "Sonoak MenuUITests" */;
+			buildConfigurationList = B3A7E07D2E216D2600785117 /* Build configuration list for PBXNativeTarget "Milo MacUITests" */;
 			buildPhases = (
 				B3A7E0692E216D2500785117 /* Sources */,
 				B3A7E06A2E216D2500785117 /* Frameworks */,
@@ -160,13 +160,13 @@
 				B3A7E06F2E216D2500785117 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				B3A7E0702E216D2500785117 /* Sonoak MenuUITests */,
+				B3A7E0702E216D2500785117 /* Milo MacUITests */,
 			);
-			name = "Sonoak MenuUITests";
+			name = "Milo MacUITests";
 			packageProductDependencies = (
 			);
 			productName = "Sonoak MenuUITests";
-			productReference = B3A7E06D2E216D2500785117 /* Sonoak MenuUITests.xctest */;
+			productReference = B3A7E06D2E216D2500785117 /* Milo MacUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
 /* End PBXNativeTarget section */
@@ -192,7 +192,7 @@
 					};
 				};
 			};
-			buildConfigurationList = B3A7E0502E216D2400785117 /* Build configuration list for PBXProject "Sonoak Menu" */;
+			buildConfigurationList = B3A7E0502E216D2400785117 /* Build configuration list for PBXProject "Milo Mac" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -206,9 +206,9 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				B3A7E0542E216D2400785117 /* Sonoak Menu */,
-				B3A7E0622E216D2500785117 /* Sonoak MenuTests */,
-				B3A7E06C2E216D2500785117 /* Sonoak MenuUITests */,
+				B3A7E0542E216D2400785117 /* Milo Mac */,
+				B3A7E0622E216D2500785117 /* Milo MacTests */,
+				B3A7E06C2E216D2500785117 /* Milo MacUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -265,12 +265,12 @@
 /* Begin PBXTargetDependency section */
 		B3A7E0652E216D2500785117 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = B3A7E0542E216D2400785117 /* Sonoak Menu */;
+			target = B3A7E0542E216D2400785117 /* Milo Mac */;
 			targetProxy = B3A7E0642E216D2500785117 /* PBXContainerItemProxy */;
 		};
 		B3A7E06F2E216D2500785117 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = B3A7E0542E216D2400785117 /* Sonoak Menu */;
+			target = B3A7E0542E216D2400785117 /* Milo Mac */;
 			targetProxy = B3A7E06E2E216D2500785117 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
@@ -402,7 +402,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
-				CODE_SIGN_ENTITLEMENTS = "Sonoak Menu/Sonoak_Menu.entitlements";
+				CODE_SIGN_ENTITLEMENTS = "Milo Mac/Milo_Mac.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -410,7 +410,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = "Sonoak-Menu-Info.plist";
+				INFOPLIST_FILE = "Milo-Mac-Info.plist";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -418,7 +418,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "leodurand.Sonoak-Menu";
+				PRODUCT_BUNDLE_IDENTIFIER = "leodurand.Milo-Mac";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -432,7 +432,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
-				CODE_SIGN_ENTITLEMENTS = "Sonoak Menu/Sonoak_Menu.entitlements";
+				CODE_SIGN_ENTITLEMENTS = "Milo Mac/Milo_Mac.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -440,7 +440,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = "Sonoak-Menu-Info.plist";
+				INFOPLIST_FILE = "Milo-Mac-Info.plist";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -448,7 +448,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "leodurand.Sonoak-Menu";
+				PRODUCT_BUNDLE_IDENTIFIER = "leodurand.Milo-Mac";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -466,11 +466,11 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.4;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "leodurand.Sonoak-MenuTests";
+				PRODUCT_BUNDLE_IDENTIFIER = "leodurand.Milo-MacTests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Sonoak Menu.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Sonoak Menu";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Milo Mac.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Milo Mac";
 			};
 			name = Debug;
 		};
@@ -484,11 +484,11 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.4;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "leodurand.Sonoak-MenuTests";
+				PRODUCT_BUNDLE_IDENTIFIER = "leodurand.Milo-MacTests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Sonoak Menu.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Sonoak Menu";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Milo Mac.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Milo Mac";
 			};
 			name = Release;
 		};
@@ -500,7 +500,7 @@
 				DEVELOPMENT_TEAM = 7C2S8B9978;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "leodurand.Sonoak-MenuUITests";
+				PRODUCT_BUNDLE_IDENTIFIER = "leodurand.Milo-MacUITests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
@@ -516,7 +516,7 @@
 				DEVELOPMENT_TEAM = 7C2S8B9978;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "leodurand.Sonoak-MenuUITests";
+				PRODUCT_BUNDLE_IDENTIFIER = "leodurand.Milo-MacUITests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
@@ -527,7 +527,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		B3A7E0502E216D2400785117 /* Build configuration list for PBXProject "Sonoak Menu" */ = {
+		B3A7E0502E216D2400785117 /* Build configuration list for PBXProject "Milo Mac" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				B3A7E0752E216D2600785117 /* Debug */,
@@ -536,7 +536,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		B3A7E0772E216D2600785117 /* Build configuration list for PBXNativeTarget "Sonoak Menu" */ = {
+		B3A7E0772E216D2600785117 /* Build configuration list for PBXNativeTarget "Milo Mac" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				B3A7E0782E216D2600785117 /* Debug */,
@@ -545,7 +545,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		B3A7E07A2E216D2600785117 /* Build configuration list for PBXNativeTarget "Sonoak MenuTests" */ = {
+		B3A7E07A2E216D2600785117 /* Build configuration list for PBXNativeTarget "Milo MacTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				B3A7E07B2E216D2600785117 /* Debug */,
@@ -554,7 +554,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		B3A7E07D2E216D2600785117 /* Build configuration list for PBXNativeTarget "Sonoak MenuUITests" */ = {
+		B3A7E07D2E216D2600785117 /* Build configuration list for PBXNativeTarget "Milo MacUITests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				B3A7E07E2E216D2600785117 /* Debug */,

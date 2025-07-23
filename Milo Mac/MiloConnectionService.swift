@@ -2,7 +2,7 @@ import Foundation
 import Network
 
 class MiloConnectionService: NSObject, ObservableObject {
-    private let miloHost = "oakos.local" // À modifier en "milo.local"
+    private let miloHost = "milo.local"
     private let miloPort = 80
     private var connectionMonitor: NWPathMonitor?
     private var isConnected = false
@@ -58,7 +58,7 @@ class MiloConnectionService: NSObject, ObservableObject {
                 
                 DispatchQueue.main.async {
                     self?.isConnected = true
-                    self?.delegate?.miloFound(host: self?.miloHost ?? "oakos.local", port: self?.miloPort ?? 80)
+                    self?.delegate?.miloFound(host: self?.miloHost ?? "milo.local", port: self?.miloPort ?? 80)
                 }
                 
             case .failed(let error):

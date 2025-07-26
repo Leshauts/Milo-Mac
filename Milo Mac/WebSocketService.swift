@@ -16,17 +16,23 @@ class WebSocketService: NSObject {
     private var isConnected = false
     private var shouldReconnect = true
     private var reconnectAttempts = 0
-    private let maxReconnectAttempts = 5
+    private let maxReconnectAttempts = 10  // Augmenté
     private var reconnectTimer: Timer?
     
     private var host: String?
-    private var port: Int = 8000
+    private var port: Int = 80
     
-    // Ping/Pong pour détecter les connexions mortes
+    // Ping/Pong amélioré
     private var pingTimer: Timer?
     private var lastPongReceived = Date()
-    private let pingInterval: TimeInterval = 30.0
-    private let pongTimeout: TimeInterval = 10.0
+    private let pingInterval: TimeInterval = 15.0      // Plus fréquent
+    private let pongTimeout: TimeInterval = 8.0        // Plus strict
+    private let initialConnectionTimeout: TimeInterval = 10.0
+    
+    // NOUVEAU : Détection de connexion morte
+    private var connectionDeadTimer: Timer?
+    private var lastMessageReceived = Date()
+    private let maxSilentPeriod: TimeInterval = 45.0   // 45s sans message = connexion morte
     
     override init() {
         super.init()
@@ -35,12 +41,13 @@ class WebSocketService: NSObject {
     
     private func setupURLSession() {
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 10
-        config.timeoutIntervalForResource = 30
+        config.timeoutIntervalForRequest = initialConnectionTimeout
+        config.timeoutIntervalForResource = 60
         urlSession = URLSession(configuration: config, delegate: self, delegateQueue: nil)
     }
     
-    func connect(to host: String, port: Int = 8000) {
+    func connect(to host: String, port: Int = 80) {
+        NSLog("🔌 WebSocket connecting to \(host):\(port)")
         self.host = host
         self.port = port
         self.shouldReconnect = true
@@ -52,21 +59,31 @@ class WebSocketService: NSObject {
     private func performConnection() {
         guard let host = host else { return }
         
-        let urlString = "ws://\(host):\(port)/ws"
+        // CORRECTION : Utiliser le bon port pour WebSocket (8000 pour WS, 80 pour API)
+        let wsPort = 8000  // WebSocket sur port 8000
+        let urlString = "ws://\(host):\(wsPort)/ws"
+        
         guard let url = URL(string: urlString) else {
-            print("❌ Invalid WebSocket URL: \(urlString)")
+            NSLog("❌ Invalid WebSocket URL: \(urlString)")
+            scheduleReconnection()
             return
         }
         
-        print("🔌 Connecting to WebSocket: \(urlString)")
+        NSLog("🔌 Connecting to WebSocket: \(urlString)")
+        
+        // Nettoyer l'ancienne connexion
+        webSocketTask?.cancel()
+        webSocketTask = nil
         
         webSocketTask = urlSession?.webSocketTask(with: url)
         webSocketTask?.resume()
         
-        // Reset le timestamp de dernier pong
+        // Reset des timestamps
         lastPongReceived = Date()
+        lastMessageReceived = Date()
         
         startListening()
+        startConnectionDeadTimer()
     }
     
     private func startListening() {
@@ -78,15 +95,19 @@ class WebSocketService: NSObject {
                 self?.startListening()
                 
             case .failure(let error):
-                print("❌ WebSocket receive error: \(error)")
-                self?.handleDisconnection()
+                NSLog("❌ WebSocket receive error: \(error)")
+                // CORRECTION : Détection immédiate de la déconnexion
+                DispatchQueue.main.async {
+                    self?.handleDisconnection()
+                }
             }
         }
     }
     
     private func handleMessage(_ message: URLSessionWebSocketTask.Message) {
-        // Mettre à jour le timestamp de dernier message reçu
+        // IMPORTANT : Mettre à jour les timestamps de réception
         lastPongReceived = Date()
+        lastMessageReceived = Date()
         
         switch message {
         case .string(let text):
@@ -106,7 +127,7 @@ class WebSocketService: NSObject {
             return
         }
         
-        print("📡 WebSocket message: \(json)")
+        NSLog("📡 WebSocket message: \(json)")
         
         // Parser les messages Milo WebSocket
         if let category = json["category"] as? String,
@@ -142,7 +163,6 @@ class WebSocketService: NSObject {
     }
     
     private func handleSystemStateChange(_ data: [String: Any]) {
-        // Extraire l'état complet depuis full_state
         guard let fullState = data["full_state"] as? [String: Any] else { return }
         
         let state = MiloState(
@@ -171,6 +191,30 @@ class WebSocketService: NSObject {
         delegate?.didReceiveVolumeUpdate(volumeStatus)
     }
     
+    // NOUVEAU : Timer pour détecter les connexions silencieuses
+    private func startConnectionDeadTimer() {
+        stopConnectionDeadTimer()
+        
+        connectionDeadTimer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { [weak self] _ in
+            self?.checkConnectionAliveness()
+        }
+    }
+    
+    private func stopConnectionDeadTimer() {
+        connectionDeadTimer?.invalidate()
+        connectionDeadTimer = nil
+    }
+    
+    private func checkConnectionAliveness() {
+        let now = Date()
+        let timeSinceLastMessage = now.timeIntervalSince(lastMessageReceived)
+        
+        if timeSinceLastMessage > maxSilentPeriod {
+            NSLog("💀 Connection appears dead (no messages for \(Int(timeSinceLastMessage))s)")
+            handleDisconnection()
+        }
+    }
+    
     private func startPingTimer() {
         stopPingTimer()
         
@@ -185,18 +229,23 @@ class WebSocketService: NSObject {
     }
     
     private func sendPing() {
-        guard let webSocketTask = webSocketTask else { return }
+        guard let webSocketTask = webSocketTask else {
+            handleDisconnection()
+            return
+        }
+        
+        NSLog("🏓 Sending ping...")
         
         webSocketTask.sendPing { [weak self] error in
             if let error = error {
-                print("❌ Ping failed: \(error)")
+                NSLog("❌ Ping failed: \(error)")
                 self?.handleDisconnection()
             } else {
-                // Vérifier si on a reçu un pong récemment
+                // Vérifier si on a reçu des données récemment
                 let now = Date()
-                if let lastPong = self?.lastPongReceived,
-                   now.timeIntervalSince(lastPong) > self?.pongTimeout ?? 10.0 {
-                    print("💔 Pong timeout - connexion considérée morte")
+                if let lastMessage = self?.lastMessageReceived,
+                   now.timeIntervalSince(lastMessage) > self?.pongTimeout ?? 8.0 {
+                    NSLog("💔 Pong timeout - connexion considérée morte")
                     self?.handleDisconnection()
                 }
             }
@@ -204,11 +253,10 @@ class WebSocketService: NSObject {
     }
     
     func disconnect() {
+        NSLog("🔌 WebSocket disconnecting...")
         shouldReconnect = false
-        reconnectTimer?.invalidate()
-        reconnectTimer = nil
         
-        stopPingTimer()
+        stopAllTimers()
         
         webSocketTask?.cancel(with: .goingAway, reason: nil)
         webSocketTask = nil
@@ -220,20 +268,26 @@ class WebSocketService: NSObject {
     }
     
     private func handleDisconnection() {
-        stopPingTimer()
+        NSLog("💔 WebSocket handling disconnection...")
+        
+        stopAllTimers()
         
         if isConnected {
             isConnected = false
+            // CORRECTION : Notification immédiate sur le main thread
             DispatchQueue.main.async { [weak self] in
                 self?.delegate?.webSocketDidDisconnect()
             }
         }
         
+        webSocketTask?.cancel()
         webSocketTask = nil
         
         // Reconnexion automatique si nécessaire
         if shouldReconnect && reconnectAttempts < maxReconnectAttempts {
             scheduleReconnection()
+        } else if reconnectAttempts >= maxReconnectAttempts {
+            NSLog("❌ Max reconnection attempts reached")
         }
     }
     
@@ -241,15 +295,38 @@ class WebSocketService: NSObject {
         reconnectAttempts += 1
         let delay = min(pow(2.0, Double(reconnectAttempts)), 30.0) // Backoff exponentiel, max 30s
         
-        print("🔄 Reconnecting in \(delay) seconds (attempt \(reconnectAttempts)/\(maxReconnectAttempts))")
+        NSLog("🔄 WebSocket reconnecting in \(Int(delay)) seconds (attempt \(reconnectAttempts)/\(maxReconnectAttempts))")
         
+        reconnectTimer?.invalidate()
         reconnectTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
             self?.performConnection()
         }
     }
     
-    deinit {
+    private func stopAllTimers() {
         stopPingTimer()
+        stopConnectionDeadTimer()
+        reconnectTimer?.invalidate()
+        reconnectTimer = nil
+    }
+    
+    // NOUVEAU : Méthode pour forcer la reconnexion depuis l'extérieur
+    func forceReconnect() {
+        NSLog("🔄 Force WebSocket reconnection requested")
+        
+        // CORRECTION : Ne pas réinitialiser reconnectAttempts pour éviter les boucles
+        if !isConnected {
+            performConnection()
+        }
+    }
+    
+    // NOUVEAU : État de connexion
+    func getConnectionState() -> Bool {
+        return isConnected
+    }
+    
+    deinit {
+        stopAllTimers()
         disconnect()
     }
 }
@@ -257,12 +334,17 @@ class WebSocketService: NSObject {
 // MARK: - URLSessionWebSocketDelegate
 extension WebSocketService: URLSessionWebSocketDelegate {
     func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didOpenWithProtocol protocol: String?) {
-        print("✅ WebSocket connected")
+        NSLog("✅ WebSocket connected")
         isConnected = true
         reconnectAttempts = 0
         
-        // Démarrer le ping timer
+        // Reset des timestamps
+        lastPongReceived = Date()
+        lastMessageReceived = Date()
+        
+        // Démarrer les timers de surveillance
         startPingTimer()
+        startConnectionDeadTimer()
         
         DispatchQueue.main.async { [weak self] in
             self?.delegate?.webSocketDidConnect()
@@ -270,7 +352,8 @@ extension WebSocketService: URLSessionWebSocketDelegate {
     }
     
     func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didCloseWith closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?) {
-        print("🔌 WebSocket disconnected with code: \(closeCode)")
+        let reasonString = reason.flatMap { String(data: $0, encoding: .utf8) } ?? "No reason"
+        NSLog("🔌 WebSocket disconnected with code: \(closeCode), reason: \(reasonString)")
         handleDisconnection()
     }
 }

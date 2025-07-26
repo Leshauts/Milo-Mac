@@ -5,22 +5,26 @@ import ServiceManagement
 // MARK: - MenuBarController
 class MenuBarController: NSObject, MiloConnectionDelegate, WebSocketServiceDelegate {
     private var statusItem: NSStatusItem
-    private var isMiloConnected = false
+    internal var isMiloConnected = false  // internal pour extensions
     private var connectionService: MiloConnectionService!
-    private var apiService: MiloAPIService?
+    internal var apiService: MiloAPIService?  // internal pour extensions
     private var webSocketService: WebSocketService!
-    private var currentState: MiloState?
-    private var currentVolume: VolumeStatus?
-    private var activeMenu: NSMenu?
-    private var isPreferencesMenuActive = false
+    internal var currentState: MiloState?  // internal pour extensions
+    internal var currentVolume: VolumeStatus?  // internal pour extensions
+    internal var activeMenu: NSMenu?  // internal pour extensions
+    internal var isPreferencesMenuActive = false  // internal pour extensions
     
-    private let volumeController = VolumeController()
+    internal let volumeController = VolumeController()  // internal pour extensions
     
-    // Loading states
-    private var loadingStates: [String: Bool] = [:]
-    private var loadingTimers: [String: Timer] = [:]
-    private var loadingStartTimes: [String: Date] = [:]
-    private var loadingTarget: String?
+    // Loading states - internal pour extensions
+    internal var loadingStates: [String: Bool] = [:]
+    internal var loadingTimers: [String: Timer] = [:]
+    internal var loadingStartTimes: [String: Date] = [:]
+    internal var loadingTarget: String?
+    
+    // NOUVEAU : Monitoring périodique de l'état de connexion
+    private var connectionSyncTimer: Timer?
+    private let connectionSyncInterval: TimeInterval = 5.0
     
     init(statusItem: NSStatusItem) {
         self.statusItem = statusItem
@@ -29,6 +33,7 @@ class MenuBarController: NSObject, MiloConnectionDelegate, WebSocketServiceDeleg
         setupStatusItem()
         updateIcon()
         setupServices()
+        startConnectionSyncMonitoring()
     }
     
     private func setupStatusItem() {
@@ -62,7 +67,79 @@ class MenuBarController: NSObject, MiloConnectionDelegate, WebSocketServiceDeleg
         volumeController.activeMenu = activeMenu
     }
     
-    private func updateIcon() {
+    // NOUVEAU : Surveillance synchronisée des connexions - intervalle raisonnable
+    private func startConnectionSyncMonitoring() {
+        connectionSyncTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in  // 2 secondes
+            self?.syncConnectionStates()
+        }
+    }
+    
+    // NOUVEAU : Synchronisation des états de connexion
+    private func syncConnectionStates() {
+        let tcpConnected = connectionService.getCurrentConnectionState()
+        let wsConnected = webSocketService.getConnectionState()
+        let shouldBeConnected = tcpConnected && wsConnected
+        
+        // CORRECTION : Logique simplifiée
+        if isMiloConnected && !shouldBeConnected {
+            NSLog("🔄 Service failure detected - disconnecting (TCP: \(tcpConnected), WS: \(wsConnected))")
+            disconnectFromMilo()
+        } else if !isMiloConnected && shouldBeConnected {
+            NSLog("🎯 Both services ready - connecting (TCP: \(tcpConnected), WS: \(wsConnected))")
+            markAsConnected()
+        }
+        
+        // Forces de reconnexion séparées
+        if tcpConnected && !wsConnected {
+            NSLog("🔄 TCP OK but WebSocket down - forcing WS reconnect")
+            webSocketService.forceReconnect()
+        }
+        
+        if !tcpConnected && wsConnected {
+            NSLog("⚠️ WebSocket OK but TCP down - investigating...")
+            connectionService.forceReconnect()
+        }
+    }
+    
+    private func disconnectFromMilo() {
+        isMiloConnected = false
+        updateIcon()
+        
+        // Nettoyer les états
+        apiService = nil
+        volumeController.apiService = nil
+        currentState = nil
+        currentVolume = nil
+        
+        // Arrêter tous les loadings
+        for (sourceId, _) in loadingStates {
+            loadingStates[sourceId] = false
+            loadingTimers[sourceId]?.invalidate()
+            loadingTimers[sourceId] = nil
+            loadingStartTimes[sourceId] = nil
+        }
+        loadingTarget = nil
+        
+        volumeController.cleanup()
+        
+        // Rafraîchir le menu si ouvert
+        if let menu = activeMenu {
+            updateMenuInRealTime(menu)
+        }
+    }
+    
+    private func markAsConnected() {
+        isMiloConnected = true
+        updateIcon()
+        
+        // Rafraîchir l'état
+        Task {
+            await refreshState()
+            await refreshVolumeStatus()
+        }
+    }
+    
+    internal func updateIcon() {  // internal pour extensions
         DispatchQueue.main.async { [weak self] in
             self?.statusItem.button?.alphaValue = self?.isMiloConnected == true ? 1.0 : 0.5
         }
@@ -101,7 +178,6 @@ class MenuBarController: NSObject, MiloConnectionDelegate, WebSocketServiceDeleg
         isPreferencesMenuActive = false
         volumeController.activeMenu = menu
         
-        // Méthode moderne sans popUpMenu
         displayMenu(menu)
     }
     
@@ -118,12 +194,11 @@ class MenuBarController: NSObject, MiloConnectionDelegate, WebSocketServiceDeleg
         activeMenu = menu
         isPreferencesMenuActive = true
         
-        // Méthode moderne sans popUpMenu
         displayMenu(menu)
     }
     
     private func displayMenu(_ menu: NSMenu) {
-        // AJOUT : Activer l'app pour que les contrôles gardent leur couleur
+        // Activer l'app pour que les contrôles gardent leur couleur
         NSApp.activate(ignoringOtherApps: true)
         
         // Assigner le menu au statusItem
@@ -141,7 +216,8 @@ class MenuBarController: NSObject, MiloConnectionDelegate, WebSocketServiceDeleg
         }
     }
     
-    private func buildConnectedPreferencesMenu(_ menu: NSMenu) {
+    // MARK: - Menu Building - internal pour extensions
+    internal func buildConnectedPreferencesMenu(_ menu: NSMenu) {
         // Volume
         let volumeItems = MenuItemFactory.createVolumeSection(
             volume: currentVolume?.volume ?? 50,
@@ -178,7 +254,7 @@ class MenuBarController: NSObject, MiloConnectionDelegate, WebSocketServiceDeleg
         menu.addItem(NSMenuItem.separator())
         
         // Toggle démarrage automatique
-        let launchAtLoginItem = createSimpleToggleItem(
+        let launchAtLoginItem = MenuItemHelper.createSimpleToggleItem(
             title: "Démarrer au démarrage du Mac",
             isEnabled: isLaunchAtLoginEnabled(),
             target: self,
@@ -187,7 +263,7 @@ class MenuBarController: NSObject, MiloConnectionDelegate, WebSocketServiceDeleg
         menu.addItem(launchAtLoginItem)
         
         // Quitter
-        let quitItem = createSimpleMenuItem(
+        let quitItem = MenuItemHelper.createSimpleMenuItem(
             title: "Quitter",
             target: self,
             action: #selector(quitApplication)
@@ -195,7 +271,7 @@ class MenuBarController: NSObject, MiloConnectionDelegate, WebSocketServiceDeleg
         menu.addItem(quitItem)
     }
     
-    private func buildConnectedMenuWithLoading(_ menu: NSMenu) {
+    internal func buildConnectedMenuWithLoading(_ menu: NSMenu) {
         // Volume
         let volumeItems = MenuItemFactory.createVolumeSection(
             volume: currentVolume?.volume ?? 50,
@@ -229,13 +305,12 @@ class MenuBarController: NSObject, MiloConnectionDelegate, WebSocketServiceDeleg
         systemItems.forEach { menu.addItem($0) }
     }
     
-    private func buildDisconnectedMenu(_ menu: NSMenu) {
+    internal func buildDisconnectedMenu(_ menu: NSMenu) {
         let disconnectedItem = MenuItemFactory.createDisconnectedItem()
         menu.addItem(disconnectedItem)
     }
     
-    // AJOUT : Menu préférences quand Milo est déconnecté
-    private func buildDisconnectedPreferencesMenu(_ menu: NSMenu) {
+    internal func buildDisconnectedPreferencesMenu(_ menu: NSMenu) {
         // Message de déconnexion
         let disconnectedItem = MenuItemFactory.createDisconnectedItem()
         menu.addItem(disconnectedItem)
@@ -244,7 +319,7 @@ class MenuBarController: NSObject, MiloConnectionDelegate, WebSocketServiceDeleg
         menu.addItem(NSMenuItem.separator())
         
         // Toggle démarrage automatique (toujours accessible)
-        let launchAtLoginItem = createSimpleToggleItem(
+        let launchAtLoginItem = MenuItemHelper.createSimpleToggleItem(
             title: "Démarrer au démarrage du Mac",
             isEnabled: isLaunchAtLoginEnabled(),
             target: self,
@@ -253,7 +328,7 @@ class MenuBarController: NSObject, MiloConnectionDelegate, WebSocketServiceDeleg
         menu.addItem(launchAtLoginItem)
         
         // Quitter (toujours accessible)
-        let quitItem = createSimpleMenuItem(
+        let quitItem = MenuItemHelper.createSimpleMenuItem(
             title: "Quitter",
             target: self,
             action: #selector(quitApplication)
@@ -280,119 +355,6 @@ class MenuBarController: NSObject, MiloConnectionDelegate, WebSocketServiceDeleg
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
                 self?.monitorMenuClosure()
             }
-        }
-    }
-    
-    // MARK: - Gestion démarrage automatique
-    private func isLaunchAtLoginEnabled() -> Bool {
-        if #available(macOS 13.0, *) {
-            return SMAppService.mainApp.status == .enabled
-        } else {
-            let bundleIdentifier = Bundle.main.bundleIdentifier ?? ""
-            return SMLoginItemSetEnabled(bundleIdentifier as CFString, false)
-        }
-    }
-    
-    @objc private func toggleLaunchAtLogin() {
-        if #available(macOS 13.0, *) {
-            let service = SMAppService.mainApp
-            
-            do {
-                if service.status == .enabled {
-                    try service.unregister()
-                } else {
-                    try service.register()
-                }
-            } catch {
-                print("❌ Erreur toggle démarrage: \(error)")
-            }
-        } else {
-            let bundleIdentifier = Bundle.main.bundleIdentifier ?? ""
-            let currentStatus = isLaunchAtLoginEnabled()
-            SMLoginItemSetEnabled(bundleIdentifier as CFString, !currentStatus)
-        }
-    }
-    
-    @objc private func quitApplication() {
-        NSApplication.shared.terminate(nil)
-    }
-    
-    // MARK: - Items de menu simples
-    private func createSimpleMenuItem(title: String, target: AnyObject, action: Selector) -> NSMenuItem {
-        let item = NSMenuItem()
-        
-        let containerView = SimpleHoverableView(frame: NSRect(x: 0, y: 0, width: 300, height: 32))
-        
-        let textField = NSTextField(labelWithString: title)
-        textField.font = NSFont.menuFont(ofSize: 13)
-        textField.textColor = NSColor.labelColor
-        textField.frame = NSRect(x: 12, y: 8, width: 200, height: 16)
-        textField.isEditable = false
-        textField.isBordered = false
-        textField.backgroundColor = NSColor.clear
-        
-        containerView.addSubview(textField)
-        containerView.clickHandler = { [weak target] in
-            _ = target?.perform(action)
-        }
-        
-        item.view = containerView
-        return item
-    }
-    
-    private func createSimpleToggleItem(title: String, isEnabled: Bool, target: AnyObject, action: Selector) -> NSMenuItem {
-        let item = NSMenuItem()
-        
-        let containerView = SimpleHoverableView(frame: NSRect(x: 0, y: 0, width: 300, height: 32))
-        
-        let textField = NSTextField(labelWithString: title)
-        textField.font = NSFont.menuFont(ofSize: 13)
-        textField.textColor = NSColor.labelColor
-        textField.frame = NSRect(x: 12, y: 8, width: 200, height: 16)
-        textField.isEditable = false
-        textField.isBordered = false
-        textField.backgroundColor = NSColor.clear
-        
-        // Toggle switch petit format (26x16px)
-        let toggle = NSSwitch()
-        toggle.state = isEnabled ? .on : .off
-        toggle.frame = NSRect(x: 262, y: 8, width: 26, height: 16)
-        toggle.controlSize = .small
-        toggle.target = target
-        toggle.action = action
-        
-        containerView.addSubview(textField)
-        containerView.addSubview(toggle)
-        
-        containerView.clickHandler = {
-            toggle.state = toggle.state == .on ? .off : .on
-            _ = target.perform(action, with: toggle)
-        }
-        
-        item.view = containerView
-        return item
-    }
-    
-    // MARK: - Gestion du loading
-    private func setLoadingState(for sourceId: String, isLoading: Bool) {
-        if loadingStates[sourceId] == isLoading { return }
-        
-        let oldState = loadingStates[sourceId] ?? false
-        loadingStates[sourceId] = isLoading
-        
-        if let menu = activeMenu, oldState != isLoading {
-            updateMenuInRealTime(menu)
-        }
-    }
-    
-    private func stopLoadingForSource(_ sourceId: String) {
-        setLoadingState(for: sourceId, isLoading: false)
-        loadingTimers[sourceId]?.invalidate()
-        loadingTimers[sourceId] = nil
-        loadingStartTimes[sourceId] = nil
-        
-        if loadingTarget == sourceId {
-            loadingTarget = nil
         }
     }
     
@@ -455,21 +417,112 @@ class MenuBarController: NSObject, MiloConnectionDelegate, WebSocketServiceDeleg
         volumeController.handleVolumeChange(newVolume)
     }
     
-    // MARK: - State Management
-    private func refreshState() async {
+    @objc private func toggleLaunchAtLogin() {
+        if #available(macOS 13.0, *) {
+            let service = SMAppService.mainApp
+            
+            do {
+                if service.status == .enabled {
+                    try service.unregister()
+                } else {
+                    try service.register()
+                }
+            } catch {
+                print("❌ Erreur toggle démarrage: \(error)")
+            }
+        } else {
+            let bundleIdentifier = Bundle.main.bundleIdentifier ?? ""
+            let currentStatus = isLaunchAtLoginEnabled()
+            SMLoginItemSetEnabled(bundleIdentifier as CFString, !currentStatus)
+        }
+    }
+    
+    @objc private func quitApplication() {
+        NSApplication.shared.terminate(nil)
+    }
+    
+    // MARK: - Utilities
+    private func isLaunchAtLoginEnabled() -> Bool {
+        if #available(macOS 13.0, *) {
+            return SMAppService.mainApp.status == .enabled
+        } else {
+            let bundleIdentifier = Bundle.main.bundleIdentifier ?? ""
+            return SMLoginItemSetEnabled(bundleIdentifier as CFString, false)
+        }
+    }
+    
+    deinit {
+        connectionSyncTimer?.invalidate()
+    }
+}
+
+// MARK: - Loading State Management
+extension MenuBarController {
+    func setLoadingState(for sourceId: String, isLoading: Bool) {
+        if loadingStates[sourceId] == isLoading { return }
+        
+        let oldState = loadingStates[sourceId] ?? false
+        loadingStates[sourceId] = isLoading
+        
+        if let menu = activeMenu, oldState != isLoading {
+            updateMenuInRealTime(menu)
+        }
+    }
+    
+    func stopLoadingForSource(_ sourceId: String) {
+        setLoadingState(for: sourceId, isLoading: false)
+        loadingTimers[sourceId]?.invalidate()
+        loadingTimers[sourceId] = nil
+        loadingStartTimes[sourceId] = nil
+        
+        if loadingTarget == sourceId {
+            loadingTarget = nil
+        }
+    }
+    
+    func updateMenuInRealTime(_ menu: NSMenu) {
+        CircularMenuItem.cleanupAllSpinners()
+        
+        menu.removeAllItems()
+        
+        if isMiloConnected {
+            if isPreferencesMenuActive {
+                buildConnectedPreferencesMenu(menu)
+            } else {
+                buildConnectedMenuWithLoading(menu)
+            }
+        } else {
+            if isPreferencesMenuActive {
+                buildDisconnectedPreferencesMenu(menu)
+            } else {
+                buildDisconnectedMenu(menu)
+            }
+        }
+    }
+}
+
+// MARK: - State Management
+extension MenuBarController {
+    func refreshState() async {
         guard let apiService = apiService else { return }
         
         do {
             let state = try await apiService.fetchState()
             await MainActor.run {
                 self.currentState = state
+                NSLog("📊 State refreshed: \(state.activeSource)")
             }
         } catch {
-            print("❌ Erreur refresh état: \(error)")
+            NSLog("❌ Erreur refresh état: \(error)")
+            
+            // Si l'API ne répond plus, considérer comme déconnecté
+            await MainActor.run {
+                self.connectionService.forceReconnect()
+            }
         }
     }
     
-    private func refreshVolumeStatus() async {
+    func refreshVolumeStatus() async {
         guard let apiService = apiService else { return }
         
         do {
@@ -477,20 +530,28 @@ class MenuBarController: NSObject, MiloConnectionDelegate, WebSocketServiceDeleg
             await MainActor.run {
                 self.currentVolume = volumeStatus
                 self.volumeController.setCurrentVolume(volumeStatus)
+                NSLog("🔊 Volume refreshed: \(volumeStatus.volume)")
             }
         } catch {
-            print("❌ Erreur refresh volume: \(error)")
+            NSLog("❌ Erreur refresh volume: \(error)")
         }
     }
-    
-    // MARK: - MiloConnectionDelegate
+}
+
+// MARK: - MiloConnectionDelegate
+extension MenuBarController {
     func miloFound(host: String, port: Int) {
-        if isMiloConnected { return }
+        if isMiloConnected {
+            NSLog("ℹ️ Already connected to Milo")
+            return
+        }
+        
+        NSLog("✅ Milo found at \(host):\(port)")
         waitForServiceReady(host: host, port: port)
     }
     
     private func waitForServiceReady(host: String, port: Int, attempt: Int = 1) {
-        let maxAttempts = 10
+        let maxAttempts = 15  // Augmenté pour plus de patience
         let apiService = MiloAPIService(host: host, port: port)
         
         Task { @MainActor in
@@ -498,6 +559,8 @@ class MenuBarController: NSObject, MiloConnectionDelegate, WebSocketServiceDeleg
                 _ = try await apiService.fetchState()
                 self.connectToMilo(host: host, port: port)
             } catch {
+                NSLog("⏳ Service not ready (attempt \(attempt)/\(maxAttempts)): \(error.localizedDescription)")
+                
                 if attempt < maxAttempts {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
                         self?.waitForServiceReady(host: host, port: port, attempt: attempt + 1)
@@ -510,47 +573,61 @@ class MenuBarController: NSObject, MiloConnectionDelegate, WebSocketServiceDeleg
     }
     
     private func connectToMilo(host: String, port: Int) {
-        isMiloConnected = true
-        updateIcon()
+        guard !isMiloConnected else { return }
+        
+        NSLog("🎯 Setting up Milo services...")
+        
+        // CORRECTION : Ne pas marquer comme connecté tout de suite
+        // Laisser le sync monitor détecter quand les deux services sont prêts
         
         apiService = MiloAPIService(host: host, port: port)
         volumeController.apiService = apiService
         
-        webSocketService.connect(to: host, port: port)
-        
-        Task {
-            await refreshState()
-            await refreshVolumeStatus()
+        // Connecter WebSocket seulement si pas déjà en cours
+        if !webSocketService.getConnectionState() {
+            webSocketService.connect(to: host, port: port)
         }
     }
     
     func miloLost() {
-        if !isMiloConnected { return }
+        guard isMiloConnected else { return }
         
-        isMiloConnected = false
-        updateIcon()
-        apiService = nil
-        volumeController.apiService = nil
-        currentState = nil
-        currentVolume = nil
+        NSLog("💔 Milo connection lost - cleaning up")
+        disconnectFromMilo()
+    }
+}
+
+// MARK: - WebSocketServiceDelegate
+extension MenuBarController {
+    func webSocketDidConnect() {
+        NSLog("🌐 WebSocket connected successfully")
         
-        for (sourceId, _) in loadingStates {
-            loadingStates[sourceId] = false
-            loadingTimers[sourceId]?.invalidate()
-            loadingTimers[sourceId] = nil
-            loadingStartTimes[sourceId] = nil
+        // CORRECTION : Marquer comme connecté seulement si les deux services sont OK
+        let tcpConnected = connectionService.getCurrentConnectionState()
+        
+        if tcpConnected && !isMiloConnected {
+            NSLog("🎯 Both services connected - marking as connected")
+            isMiloConnected = true
+            updateIcon()
         }
-        loadingTarget = nil
         
-        volumeController.cleanup()
-        webSocketService.disconnect()
-        
-        if let menu = activeMenu {
-            updateMenuInRealTime(menu)
+        // Rafraîchir l'état si on était déjà connecté
+        if isMiloConnected {
+            Task {
+                await refreshState()
+                await refreshVolumeStatus()
+            }
         }
     }
     
-    // MARK: - WebSocketServiceDelegate
+    func webSocketDidDisconnect() {
+        NSLog("🌐 WebSocket disconnected")
+        
+        // CORRECTION : Ne pas marquer comme déconnecté immédiatement
+        // Laisser le sync monitor gérer la logique de déconnexion
+        // Le WebSocket peut se reconnecter automatiquement
+    }
+    
     func didReceiveStateUpdate(_ state: MiloState) {
         currentState = state
         
@@ -583,111 +660,5 @@ class MenuBarController: NSObject, MiloConnectionDelegate, WebSocketServiceDeleg
         currentVolume = volume
         volumeController.setCurrentVolume(volume)
         volumeController.updateSliderFromWebSocket(volume.volume)
-    }
-    
-    func webSocketDidConnect() {}
-    func webSocketDidDisconnect() {}
-    
-    private func updateMenuInRealTime(_ menu: NSMenu) {
-        CircularMenuItem.cleanupAllSpinners()
-        
-        menu.removeAllItems()
-        
-        if isMiloConnected {
-            if isPreferencesMenuActive {
-                buildConnectedPreferencesMenu(menu)
-            } else {
-                buildConnectedMenuWithLoading(menu)
-            }
-        } else {
-            if isPreferencesMenuActive {
-                buildDisconnectedPreferencesMenu(menu)
-            } else {
-                buildDisconnectedMenu(menu)
-            }
-        }
-    }
-}
-
-// MARK: - Simple Hoverable View
-class SimpleHoverableView: NSView {
-    var clickHandler: (() -> Void)?
-    private var trackingArea: NSTrackingArea?
-    private var hoverBackgroundLayer: CALayer?
-    
-    override init(frame frameRect: NSRect) {
-        super.init(frame: frameRect)
-        setupView()
-    }
-    
-    required init?(coder: NSCoder) {
-        super.init(coder: coder)
-        setupView()
-    }
-    
-    private func setupView() {
-        wantsLayer = true
-        setupTrackingArea()
-        
-        hoverBackgroundLayer = CALayer()
-        hoverBackgroundLayer?.frame = NSRect(x: 5, y: 0, width: bounds.width - 10, height: bounds.height)
-        hoverBackgroundLayer?.cornerRadius = 6
-        hoverBackgroundLayer?.backgroundColor = NSColor.clear.cgColor
-        
-        layer?.insertSublayer(hoverBackgroundLayer!, at: 0)
-    }
-    
-    private func setupTrackingArea() {
-        let options: NSTrackingArea.Options = [
-            .mouseEnteredAndExited,
-            .activeAlways,
-            .inVisibleRect
-        ]
-        
-        trackingArea = NSTrackingArea(rect: bounds, options: options, owner: self, userInfo: nil)
-        addTrackingArea(trackingArea!)
-    }
-    
-    override func updateTrackingAreas() {
-        super.updateTrackingAreas()
-        
-        if let trackingArea = trackingArea {
-            removeTrackingArea(trackingArea)
-        }
-        
-        setupTrackingArea()
-    }
-    
-    override func mouseEntered(with event: NSEvent) {
-        super.mouseEntered(with: event)
-        
-        let hoverColor: NSColor
-        if #available(macOS 10.14, *) {
-            hoverColor = NSColor.tertiaryLabelColor
-        } else {
-            hoverColor = NSColor.lightGray.withAlphaComponent(0.2)
-        }
-        
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        hoverBackgroundLayer?.backgroundColor = hoverColor.cgColor
-        CATransaction.commit()
-    }
-    
-    override func mouseExited(with event: NSEvent) {
-        super.mouseExited(with: event)
-        
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        hoverBackgroundLayer?.backgroundColor = NSColor.clear.cgColor
-        CATransaction.commit()
-    }
-    
-    override func mouseDown(with event: NSEvent) {
-        clickHandler?()
-    }
-    
-    override func hitTest(_ point: NSPoint) -> NSView? {
-        return bounds.contains(point) ? self : nil
     }
 }

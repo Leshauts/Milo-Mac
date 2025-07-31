@@ -80,7 +80,7 @@ class MenuBarController: NSObject, MiloConnectionDelegate, WebSocketServiceDeleg
         let wsConnected = webSocketService.getConnectionState()
         let shouldBeConnected = tcpConnected && wsConnected
         
-        // CORRECTION : Logique simplifiée
+        // CORRECTION : Logique plus conservative
         if isMiloConnected && !shouldBeConnected {
             NSLog("🔄 Service failure detected - disconnecting (TCP: \(tcpConnected), WS: \(wsConnected))")
             disconnectFromMilo()
@@ -89,15 +89,21 @@ class MenuBarController: NSObject, MiloConnectionDelegate, WebSocketServiceDeleg
             markAsConnected()
         }
         
-        // Forces de reconnexion séparées
-        if tcpConnected && !wsConnected {
-            NSLog("🔄 TCP OK but WebSocket down - forcing WS reconnect")
-            webSocketService.forceReconnect()
+        // AMÉLIORATION : Forces de reconnexion beaucoup moins agressives
+        if tcpConnected && !wsConnected && !isMiloConnected {
+            // Seulement si on n'est pas connecté du tout
+            NSLog("🔄 TCP OK but WebSocket down - gentle WS reconnect")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { [weak self] in
+                // Vérifier à nouveau avant de forcer
+                if self?.webSocketService.getConnectionState() == false {
+                    self?.webSocketService.forceReconnect()
+                }
+            }
         }
         
         if !tcpConnected && wsConnected {
             NSLog("⚠️ WebSocket OK but TCP down - investigating...")
-            connectionService.forceReconnect()
+            // Pas de force reconnect pour TCP, laisser faire naturellement
         }
     }
     
@@ -131,6 +137,11 @@ class MenuBarController: NSObject, MiloConnectionDelegate, WebSocketServiceDeleg
     private func markAsConnected() {
         isMiloConnected = true
         updateIcon()
+        
+        // CORRECTION : Toujours recréer l'apiService pour être sûr qu'il soit fonctionnel
+        NSLog("🔧 (Re)creating API service for milo.local")
+        apiService = MiloAPIService(host: "milo.local", port: 80)
+        volumeController.apiService = apiService
         
         // Rafraîchir l'état
         Task {
@@ -360,8 +371,16 @@ class MenuBarController: NSObject, MiloConnectionDelegate, WebSocketServiceDeleg
     
     // MARK: - Actions
     @objc private func sourceClickedWithLoading(_ sender: NSMenuItem) {
-        guard let apiService = apiService,
-              let sourceId = sender.representedObject as? String else { return }
+        guard let apiService = apiService else {
+            NSLog("❌ sourceClickedWithLoading: apiService is nil!")
+            return
+        }
+        guard let sourceId = sender.representedObject as? String else {
+            NSLog("❌ sourceClickedWithLoading: invalid sourceId")
+            return
+        }
+        
+        NSLog("🎯 sourceClickedWithLoading: \(sourceId) with apiService: \(apiService)")
         
         if loadingStates[sourceId] == true { return }
         
@@ -381,8 +400,11 @@ class MenuBarController: NSObject, MiloConnectionDelegate, WebSocketServiceDeleg
         
         Task {
             do {
+                NSLog("📡 Sending changeSource request for: \(sourceId)")
                 try await apiService.changeSource(sourceId)
+                NSLog("✅ changeSource request completed for: \(sourceId)")
             } catch {
+                NSLog("❌ changeSource request failed for \(sourceId): \(error)")
                 await MainActor.run {
                     self.stopLoadingForSource(sourceId)
                 }
@@ -391,23 +413,36 @@ class MenuBarController: NSObject, MiloConnectionDelegate, WebSocketServiceDeleg
     }
     
     @objc private func toggleClicked(_ sender: NSMenuItem) {
-        guard let apiService = apiService,
-              let toggleType = sender.representedObject as? String else { return }
+        guard let apiService = apiService else {
+            NSLog("❌ toggleClicked: apiService is nil!")
+            return
+        }
+        guard let toggleType = sender.representedObject as? String else {
+            NSLog("❌ toggleClicked: invalid toggleType")
+            return
+        }
+        
+        NSLog("🎯 toggleClicked: \(toggleType) with apiService: \(apiService)")
         
         Task {
             do {
                 switch toggleType {
                 case "multiroom":
                     let newState = !(currentState?.multiroomEnabled ?? false)
+                    NSLog("📡 Sending setMultiroom request: \(newState)")
                     try await apiService.setMultiroom(newState)
+                    NSLog("✅ setMultiroom request completed: \(newState)")
                 case "equalizer":
                     let newState = !(currentState?.equalizerEnabled ?? false)
+                    NSLog("📡 Sending setEqualizer request: \(newState)")
                     try await apiService.setEqualizer(newState)
+                    NSLog("✅ setEqualizer request completed: \(newState)")
                 default:
+                    NSLog("❌ Unknown toggle type: \(toggleType)")
                     break
                 }
             } catch {
-                print("❌ Erreur toggle: \(error)")
+                NSLog("❌ Toggle request failed for \(toggleType): \(error)")
             }
         }
     }
@@ -602,13 +637,12 @@ extension MenuBarController {
     func webSocketDidConnect() {
         NSLog("🌐 WebSocket connected successfully")
         
-        // CORRECTION : Marquer comme connecté seulement si les deux services sont OK
+        // CORRECTION : Appeler markAsConnected() au lieu de juste mettre isMiloConnected = true
         let tcpConnected = connectionService.getCurrentConnectionState()
         
         if tcpConnected && !isMiloConnected {
-            NSLog("🎯 Both services connected - marking as connected")
-            isMiloConnected = true
-            updateIcon()
+            NSLog("🎯 Both services connected - calling markAsConnected()")
+            markAsConnected()  // ✅ CORRECTION : Appeler markAsConnected() qui crée l'apiService
         }
         
         // Rafraîchir l'état si on était déjà connecté

@@ -130,11 +130,6 @@ class LoadingSpinner: NSView {
             // CORRECTION : Changer le sens pour aller dans le sens horaire
             self.currentStep = (self.currentStep - 1 + self.totalSteps) % self.totalSteps
             
-            // Debug : afficher où est la tête de lumière
-            let positions = ["12h", "1h30", "3h", "4h30", "6h", "7h30", "9h", "10h30"]
-            let lightHeadPos = self.currentStep
-            let currentPos = positions[lightHeadPos]
-            print("🎬 Étape \(self.currentStep): Lumière sur \(currentPos)")
             
             // Mettre à jour les opacités avec transitions
             self.updateOpacities()

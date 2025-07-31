@@ -80,12 +80,13 @@ class VolumeController {
     }
     
     private func sendVolumeUpdate(_ volume: Int) {
-        guard activeMenu != nil else { return }
+        guard activeMenu != nil, let apiService = apiService else { return }
+        
         lastVolumeAPICall = Date()
         
         Task { @MainActor in
             do {
-                try await apiService?.setVolume(volume)
+                try await apiService.setVolume(volume)
             } catch {
                 print("❌ Erreur volume: \(error)")
             }

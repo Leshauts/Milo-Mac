@@ -82,6 +82,7 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
         }
     }
     
+    // CORRECTION : Afficher le menu d'abord, refresh après (pas de blocage)
     private func showMenu() {
         let menu = NSMenu()
         menu.font = NSFont.menuFont(ofSize: 13)
@@ -97,6 +98,21 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
         volumeController.activeMenu = menu
         
         displayMenu(menu)
+        
+        // MODIFICATION : Refresh en arrière-plan APRÈS avoir affiché le menu
+        if isMiloConnected {
+            Task {
+                await refreshState()
+                await refreshVolumeStatus()
+                
+                // Mettre à jour le menu si refresh trouve des changements
+                await MainActor.run {
+                    if let menu = self.activeMenu {
+                        self.updateMenuInRealTime(menu)
+                    }
+                }
+            }
+        }
     }
     
     private func showPreferencesMenu() {
@@ -113,6 +129,20 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
         isPreferencesMenuActive = true
         
         displayMenu(menu)
+        
+        // MODIFICATION : Refresh en arrière-plan pour les préférences aussi
+        if isMiloConnected {
+            Task {
+                await refreshState()
+                await refreshVolumeStatus()
+                
+                await MainActor.run {
+                    if let menu = self.activeMenu {
+                        self.updateMenuInRealTime(menu)
+                    }
+                }
+            }
+        }
     }
     
     private func displayMenu(_ menu: NSMenu) {
@@ -132,7 +162,7 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
     
     // MARK: - Menu Building
     private func buildConnectedMenuWithLoading(_ menu: NSMenu) {
-        // Volume
+        // Volume - utilise maintenant currentVolume fraîchement récupéré
         let volumeItems = MenuItemFactory.createVolumeSection(
             volume: currentVolume?.volume ?? 50,
             target: self,
@@ -216,8 +246,16 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
     }
     
     private func handleMenuClosed() {
+        NSLog("🔐 Menu closing - sending pending volume and cleaning up")
+        
+        // ÉTAPE 1 : Envoyer le volume pending AVANT de nettoyer quoi que ce soit
         volumeController.forceSendPendingVolume()
+        
+        // ÉTAPE 2 : Cleanup du controller AVANT de supprimer les références
+        // Comme ça, cleanup() peut encore utiliser activeMenu si nécessaire
         volumeController.cleanup()
+        
+        // ÉTAPE 3 : Supprimer les références seulement à la fin
         activeMenu = nil
         isPreferencesMenuActive = false
         volumeController.activeMenu = nil
@@ -482,7 +520,7 @@ extension MenuBarController {
         volumeController.updateSliderFromWebSocket(volume.volume)
     }
     
-    // MARK: - State Refresh
+    // MARK: - State Refresh (méthodes existantes avec gestion d'erreur)
     private func refreshState() async {
         guard let apiService = connectionManager.getAPIService() else { return }
         
@@ -493,7 +531,10 @@ extension MenuBarController {
                 NSLog("📊 State refreshed: \(state.activeSource)")
             }
         } catch {
-            NSLog("❌ Erreur refresh état: \(error)")
+            // CORRECTION : Gestion d'erreur silencieuse pour timeouts
+            if (error as NSError).code != NSURLErrorTimedOut {
+                NSLog("❌ State refresh failed: \(error)")
+            }
         }
     }
     
@@ -503,12 +544,21 @@ extension MenuBarController {
         do {
             let volumeStatus = try await apiService.getVolumeStatus()
             await MainActor.run {
+                let oldVolume = self.currentVolume?.volume ?? -1
                 self.currentVolume = volumeStatus
                 self.volumeController.setCurrentVolume(volumeStatus)
-                NSLog("🔊 Volume refreshed: \(volumeStatus.volume)")
+                
+                // CORRECTION : Mettre à jour le slider actif si volume a changé
+                if oldVolume != volumeStatus.volume {
+                    NSLog("🔊 Volume refreshed: \(oldVolume) → \(volumeStatus.volume)")
+                    self.volumeController.updateSliderFromWebSocket(volumeStatus.volume)
+                }
             }
         } catch {
-            NSLog("❌ Erreur refresh volume: \(error)")
+            // CORRECTION : Gestion d'erreur silencieuse pour timeouts
+            if (error as NSError).code != NSURLErrorTimedOut {
+                NSLog("❌ Volume refresh failed: \(error)")
+            }
         }
     }
 }

@@ -17,10 +17,17 @@ struct VolumeStatus {
 
 class MiloAPIService {
     private let baseURL: String
-    private let session = URLSession.shared
+    private let session: URLSession
     
-    init(host: String, port: Int = 80) {  // Changé de 8000 à 80
+    init(host: String, port: Int = 80) {
         self.baseURL = "http://\(host):\(port)"
+        
+        // CORRECTION : Configuration avec timeouts plus courts pour éviter les blocages
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 3.0      // 3s au lieu de défaut (60s)
+        config.timeoutIntervalForResource = 5.0     // 5s au lieu de défaut (très long)
+        config.waitsForConnectivity = false         // Ne pas attendre la connectivité
+        self.session = URLSession(configuration: config)
     }
     
     func fetchState() async throws -> MiloState {

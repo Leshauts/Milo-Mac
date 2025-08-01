@@ -1,7 +1,7 @@
 import AppKit
 
 class NativeVolumeSlider: NSSlider {
-    // MARK: - Constants
+    // MARK: - Constants (dimensions originales)
     private let trackHeight: CGFloat = 22
     private let fillHeight: CGFloat = 20
     private let thumbSize: CGFloat = 20
@@ -29,6 +29,12 @@ class NativeVolumeSlider: NSSlider {
     private var trackLayer: CALayer!
     private var iconLayer: CALayer!
     private var isThumbPressed: Bool = false
+    private var lastValue: Double = 0
+    private var isUpdatingProgrammatically: Bool = false
+    
+    // Pour gérer l'action externe
+    private var externalTarget: AnyObject?
+    private var externalAction: Selector?
     
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -47,16 +53,37 @@ class NativeVolumeSlider: NSSlider {
     
     private func setupSlider() {
         sliderType = .linear
-        isContinuous = true
+        isContinuous = true  // CRUCIAL: Actions envoyées pendant le drag, pas seulement à la fin
         controlSize = .regular
         cell = NativeVolumeSliderCell()
         minValue = 0
         maxValue = 100
+        lastValue = doubleValue
         wantsLayer = true
         setupAnimationLayers()
         
+        // Configurer self comme target pour surveiller les changements
+        target = self
+        action = #selector(sliderValueChanged)
+        
         if #available(macOS 10.14, *) {
             trackFillColor = NSColor.white
+        }
+    }
+    
+    @objc private func sliderValueChanged() {
+        let valueDifference = abs(doubleValue - lastValue)
+        
+        // Si la différence est importante (> 3%), c'est probablement un clic
+        // Si la différence est petite, c'est probablement un drag
+        let isLikelyClick = valueDifference > 3.0 && !isUpdatingProgrammatically
+        
+        updateLayerPositions(animated: isLikelyClick)
+        lastValue = doubleValue
+        
+        // Transférer l'action au vrai target si défini depuis l'extérieur
+        if let externalTarget = externalTarget, let externalAction = externalAction {
+            NSApp.sendAction(externalAction, to: externalTarget, from: self)
         }
     }
     
@@ -92,11 +119,11 @@ class NativeVolumeSlider: NSSlider {
         thumbLayer.borderWidth = 1.0
         thumbLayer.borderColor = NSColor.black.withAlphaComponent(0.5).cgColor
         
-        // AJOUT : Shadow très légère sur le thumb
+        // Shadow très légère sur le thumb
         thumbLayer.shadowColor = NSColor.black.cgColor
-        thumbLayer.shadowOpacity = 0.1        // Opacité très faible (10%)
-        thumbLayer.shadowOffset = CGSize(width: 0, height: 1)  // Décalage vers le bas
-        thumbLayer.shadowRadius = 2.0        // Rayon de flou
+        thumbLayer.shadowOpacity = 0.1
+        thumbLayer.shadowOffset = CGSize(width: 0, height: 1)
+        thumbLayer.shadowRadius = 2.0
         
         thumbLayer.actions = [
             "position": createSmoothAnimation(),
@@ -112,14 +139,6 @@ class NativeVolumeSlider: NSSlider {
         let animation = CABasicAnimation()
         animation.duration = 0.25
         animation.timingFunction = CAMediaTimingFunction(name: .easeOut)
-        return animation
-    }
-    
-    // AJOUT : Animation spécifique pour les clics sur la track
-    private func createThumbClickAnimation() -> CABasicAnimation {
-        let animation = CABasicAnimation()
-        animation.duration = 0.3  // Légèrement plus long pour les clics
-        animation.timingFunction = CAMediaTimingFunction(controlPoints: 0.25, 0.1, 0.25, 1.0)  // Easing custom fluide
         return animation
     }
     
@@ -387,7 +406,7 @@ class NativeVolumeSlider: NSSlider {
         let thumbY = bounds.midY - thumbSize / 2
         let newThumbFrame = NSRect(x: thumbX, y: thumbY, width: thumbSize, height: thumbSize)
         
-        // AJOUT : Animation conditionnelle du thumb
+        // Animation conditionnelle du thumb
         if animated {
             CATransaction.begin()
             CATransaction.setAnimationDuration(0.3)
@@ -403,7 +422,7 @@ class NativeVolumeSlider: NSSlider {
             let fillWidth = max(0, thumbCenterX - fixedFillStartX)
             let newFillFrame = NSRect(x: fixedFillStartX, y: trackY + 1, width: fillWidth, height: fillHeight)
             
-            // AJOUT : Animation conditionnelle du fill
+            // Animation conditionnelle du fill
             if animated {
                 CATransaction.begin()
                 CATransaction.setAnimationDuration(0.3)
@@ -413,8 +432,6 @@ class NativeVolumeSlider: NSSlider {
             } else {
                 fillLayer.frame = newFillFrame
             }
-            
-            print("🎯 Volume: \(Int(percentage * 100))% - FillStart: \(fixedFillStartX), Width: \(fillWidth)")
         } else {
             let newFillFrame = NSRect(x: fixedFillStartX, y: trackY + 1, width: 0, height: fillHeight)
             
@@ -427,14 +444,12 @@ class NativeVolumeSlider: NSSlider {
             } else {
                 fillLayer.frame = newFillFrame
             }
-            
-            print("🎯 Volume: 0% - Fill masqué")
         }
         
         // Gestion de l'opacité du stroke du thumb
         updateThumbStrokeOpacity(thumbX: thumbX, iconZoneRect: iconZoneRect)
         
-        // IMPORTANT : Mettre à jour les ondes à chaque changement de position !
+        // Mettre à jour les ondes à chaque changement de position
         updateWaveOpacities()
     }
     
@@ -443,7 +458,7 @@ class NativeVolumeSlider: NSSlider {
         let thumbLeftEdge = thumbX
         let distanceFromLeft = thumbLeftEdge
         
-        // CORRECTION : Utiliser les mêmes seuils pour stroke ET couleur ET shadow
+        // Utiliser les mêmes seuils pour stroke ET couleur ET shadow
         let transitionStart: CGFloat = 32    // Transition commence à 32px
         let transitionEnd: CGFloat = 16      // Transition finit à 16px
         
@@ -482,19 +497,16 @@ class NativeVolumeSlider: NSSlider {
             thumbLayer.backgroundColor = dragColor.cgColor
             thumbLayer.borderColor = NSColor.black.withAlphaComponent(CGFloat(strokeOpacity)).cgColor
             thumbLayer.shadowOpacity = shadowOpacity
-            print("🖱️ Drag - \(Int(distanceFromLeft))px, progress: \(String(format: "%.2f", progress)), stroke: \(strokeOpacity), shadow: \(shadowOpacity)")
         } else if distanceFromLeft <= transitionEnd {
             // Thumb au début : blanc pur, pas de stroke, pas de shadow
             thumbLayer.backgroundColor = NSColor.white.cgColor
             thumbLayer.borderColor = NSColor.black.withAlphaComponent(0.0).cgColor
             thumbLayer.shadowOpacity = 0.0
-            print("📍 Début slider - blanc pur sans stroke ni shadow")
         } else {
             // Thumb normal : blanc avec stroke et shadow selon la distance
             thumbLayer.backgroundColor = NSColor.white.cgColor
             thumbLayer.borderColor = NSColor.black.withAlphaComponent(CGFloat(strokeOpacity)).cgColor
             thumbLayer.shadowOpacity = shadowOpacity
-            print("✋ Thumb normal - \(Int(distanceFromLeft))px, stroke: \(strokeOpacity), shadow: \(shadowOpacity)")
         }
         
         CATransaction.commit()
@@ -552,57 +564,68 @@ class NativeVolumeSlider: NSSlider {
         }
     }
     
+    // MARK: - Target/Action override to intercept external configuration
+    override var target: AnyObject? {
+        get {
+            return externalTarget
+        }
+        set {
+            if newValue !== self {
+                externalTarget = newValue
+            }
+            super.target = self  // Toujours nous garder comme target interne
+        }
+    }
+    
+    override var action: Selector? {
+        get {
+            return externalAction
+        }
+        set {
+            externalAction = newValue
+            super.action = #selector(sliderValueChanged)  // Toujours utiliser notre action interne
+        }
+    }
+    
+    // MARK: - Override value setter to detect changes
+    override var doubleValue: Double {
+        didSet {
+            // Mettre à jour les layers même si c'est un changement programmatique
+            if isUpdatingProgrammatically {
+                updateLayerPositions(animated: false)
+            }
+            // Les changements d'interaction utilisateur sont gérés par sliderValueChanged
+        }
+    }
+    
+    // MARK: - Public method for programmatic updates
+    func setVolumeValue(_ value: Double, animated: Bool = false) {
+        isUpdatingProgrammatically = true
+        doubleValue = max(minValue, min(maxValue, value))
+        lastValue = doubleValue  // Mettre à jour lastValue aussi
+        if animated {
+            updateLayerPositions(animated: true)
+        }
+        isUpdatingProgrammatically = false
+    }
+    
+    // MARK: - Mouse event handling
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
         let trackRect = NSRect(x: 0, y: bounds.midY - trackHeight / 2, width: bounds.width, height: trackHeight)
         
-        guard trackRect.contains(point) else { return }
-        
-        isThumbPressed = true
-        
-        let thumbMinX = 1 + thumbSize / 2
-        let thumbMaxX = bounds.width - 1 - thumbSize / 2
-        let thumbRange = thumbMaxX - thumbMinX
-        
-        let relativeX = max(0, min(thumbRange, point.x - thumbMinX))
-        let percentage = thumbRange > 0 ? relativeX / thumbRange : 0
-        let newValue = minValue + (maxValue - minValue) * Double(percentage)
-        let finalValue = max(minValue, min(maxValue, newValue))
-        
-        doubleValue = finalValue
-        updateLayerPositions(animated: true)  // AJOUT : Animation sur les clics
-        
-        if let target = target, let action = action {
-            NSApp.sendAction(action, to: target, from: self)
+        if trackRect.contains(point) {
+            isThumbPressed = true
         }
+        
+        // Laisser NSSlider gérer tout le tracking nativement
+        super.mouseDown(with: event)
     }
     
     override func mouseUp(with event: NSEvent) {
         isThumbPressed = false
-        updateLayerPositions()  // Pas d'animation au mouseUp
-    }
-    
-    override func mouseDragged(with event: NSEvent) {
-        let point = convert(event.locationInWindow, from: nil)
-        
-        let thumbMinX = 1 + thumbSize / 2
-        let thumbMaxX = bounds.width - 1 - thumbSize / 2
-        let thumbRange = thumbMaxX - thumbMinX
-        
-        let relativeX = max(0, min(thumbRange, point.x - thumbMinX))
-        let percentage = thumbRange > 0 ? relativeX / thumbRange : 0
-        let newValue = minValue + (maxValue - minValue) * Double(percentage)
-        let finalValue = max(minValue, min(maxValue, newValue))
-        
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        doubleValue = finalValue
-        updateLayerPositions()  // Pas d'animation pendant le drag (trop de calls)
-        CATransaction.commit()
-        
-        if let target = target, let action = action {
-            NSApp.sendAction(action, to: target, from: self)
-        }
+        updateLayerPositions(animated: false)
+        super.mouseUp(with: event)
     }
 }
 

@@ -4,7 +4,7 @@
 
 
 
-# Milō macOS
+# Milō Mac
 
 Control remotely Milō from your Mac like it has always been here.
 

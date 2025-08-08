@@ -29,7 +29,7 @@ class MenuItemFactory {
     
     // MARK: - Disconnected State
     static func createDisconnectedItem() -> NSMenuItem {
-        let item = NSMenuItem(title: "Milo n'est pas allumé", action: nil, keyEquivalent: "")
+        let item = NSMenuItem(title: "Milō n'est pas allumé", action: nil, keyEquivalent: "")
         item.isEnabled = false
         return item
     }
@@ -53,7 +53,7 @@ class MenuItemFactory {
         let item = NSMenuItem()
         let headerView = NSView(frame: NSRect(x: 0, y: 0, width: containerWidth, height: 28))
         
-        let titleLabel = NSTextField(labelWithString: "Volume de Milo")
+        let titleLabel = NSTextField(labelWithString: "Volume de Milō")
         titleLabel.font = NSFont.systemFont(ofSize: 13, weight: .semibold)
         titleLabel.textColor = NSColor.labelColor
         titleLabel.frame = NSRect(x: 12, y: 4, width: 160, height: 16)

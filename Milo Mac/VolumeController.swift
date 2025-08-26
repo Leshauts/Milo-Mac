@@ -74,58 +74,30 @@ class VolumeController {
         slider.action = originalAction
     }
     
-    func forceSendPendingVolume() {
-        if let pendingVol = pendingVolume {
-            sendVolumeUpdate(pendingVol)
-        }
-    }
-    
-    // CORRECTION : Cleanup moins agressif pour éviter les race conditions
     func cleanup() {
-       // NSLog("🧹 VolumeController cleanup - preserving critical state")
-        
-        // CHANGEMENT : Ne pas supprimer volumeSlider immédiatement
-        // Il sera remplacé par le nouveau setVolumeSlider() du nouveau menu
-        
-        // Nettoyer seulement les timers et états temporaires
+        // Nettoyer les états temporaires
         lastUserInteraction = nil
         isUserInteracting = false
         volumeDebounceWorkItem?.cancel()
         volumeDebounceWorkItem = nil
-        
-        // GARDE : Conserver pendingVolume, lastVolumeAPICall, volumeSlider et currentVolume
-        // pour éviter la perte de données lors de réouvertures rapides
     }
     
-    // CORRECTION : Vérifications renforcées avant envoi API
     private func sendVolumeUpdate(_ volume: Int) {
-        // AJOUT : Vérifications plus robustes
-        guard let apiService = apiService else {
-            NSLog("⚠️ Cannot send volume - no API service")
-            return
-        }
-        
-        // CHANGEMENT : Vérifier activeMenu OU volumeSlider (pas forcément les deux)
-        guard activeMenu != nil || volumeSlider != nil else {
-            NSLog("⚠️ Cannot send volume - no active menu or slider")
-            return
-        }
+        guard let apiService = apiService else { return }
+        guard activeMenu != nil || volumeSlider != nil else { return }
         
         lastVolumeAPICall = Date()
-        NSLog("📡 Sending volume to API: \(volume)%")
         
-        Task { @MainActor in
+        Task {
             do {
                 try await apiService.setVolume(volume)
-                NSLog("✅ Volume set to \(volume)%")
                 // Clear pending volume en cas de succès
                 if self.pendingVolume == volume {
                     self.pendingVolume = nil
                 }
             } catch {
                 // Garder la valeur en pending si échec
-                NSLog("❌ Volume API failed: \(error.localizedDescription)")
-                self.pendingVolume = volume  // Sera envoyé au prochain refresh ou force send
+                self.pendingVolume = volume
             }
         }
     }
@@ -135,11 +107,7 @@ class VolumeController {
         
         let workItem = DispatchWorkItem { [weak self] in
             guard let self = self, let volume = self.pendingVolume else { return }
-            // CHANGEMENT : Vérification plus souple
-            guard self.activeMenu != nil || self.volumeSlider != nil else {
-                NSLog("⚠️ Skipping delayed volume update - no active context")
-                return
-            }
+            guard self.activeMenu != nil || self.volumeSlider != nil else { return }
             self.sendVolumeUpdate(volume)
         }
         

@@ -6,10 +6,12 @@ class GlobalHotkeyManager {
     private var volumeUpHotKey: HotKey?
     private var volumeDownHotKey: HotKey?
     private weak var connectionManager: MiloConnectionManager?
+    private weak var menuController: MenuBarController?  // NOUVEAU: Référence vers le contrôleur de menu
     private var isMonitoring = false
     
-    init(connectionManager: MiloConnectionManager) {
+    init(connectionManager: MiloConnectionManager, menuController: MenuBarController) {
         self.connectionManager = connectionManager
+        self.menuController = menuController  // NOUVEAU: Stocker la référence
     }
     
     func startMonitoring() {
@@ -44,6 +46,12 @@ class GlobalHotkeyManager {
     }
     
     private func handleVolumeAdjustment(delta: Int, direction: String) {
+        // NOUVEAU: Vérifier si le menu est ouvert avant de traiter le raccourci
+        if let menuController = menuController, menuController.isMenuCurrentlyOpen() {
+            NSSound.beep()  // Feedback audio pour indiquer que le raccourci est bloqué
+            return
+        }
+        
         guard let connectionManager = connectionManager,
               connectionManager.isCurrentlyConnected(),
               let apiService = connectionManager.getAPIService() else {

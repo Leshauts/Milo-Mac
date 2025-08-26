@@ -82,7 +82,7 @@ class VolumeController {
     
     // CORRECTION : Cleanup moins agressif pour éviter les race conditions
     func cleanup() {
-        NSLog("🧹 VolumeController cleanup - preserving critical state")
+       // NSLog("🧹 VolumeController cleanup - preserving critical state")
         
         // CHANGEMENT : Ne pas supprimer volumeSlider immédiatement
         // Il sera remplacé par le nouveau setVolumeSlider() du nouveau menu

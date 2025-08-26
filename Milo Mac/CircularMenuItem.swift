@@ -55,7 +55,6 @@ class CircularMenuItem {
     
     // MARK: - Nettoyage global des spinners
     static func cleanupAllSpinners() {
-        print("🧹 Nettoyage global de \(activeSpinners.count) spinners")
         for spinner in activeSpinners {
             spinner.stopAnimating()
         }

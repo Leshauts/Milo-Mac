@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		B38A0C6F2E5CE4A100826D7E /* HotKey in Frameworks */ = {isa = PBXBuildFile; productRef = B38A0C6E2E5CE4A100826D7E /* HotKey */; };
 		B39E9F462E28EF9600CDCA62 /* .gitignore in Resources */ = {isa = PBXBuildFile; fileRef = B39E9F442E28EF8F00CDCA62 /* .gitignore */; };
 /* End PBXBuildFile section */
 
@@ -57,6 +58,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B38A0C6F2E5CE4A100826D7E /* HotKey in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -118,6 +120,7 @@
 			);
 			name = "Milo Mac";
 			packageProductDependencies = (
+				B38A0C6E2E5CE4A100826D7E /* HotKey */,
 			);
 			productName = "Sonoak Menu";
 			productReference = B3A7E0552E216D2400785117 /* Milo Mac.app */;
@@ -201,6 +204,9 @@
 			);
 			mainGroup = B3A7E04C2E216D2400785117;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				B38A0C6D2E5CE4A100826D7E /* XCRemoteSwiftPackageReference "HotKey" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = B3A7E0562E216D2400785117 /* Products */;
 			projectDirPath = "";
@@ -580,6 +586,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		B38A0C6D2E5CE4A100826D7E /* XCRemoteSwiftPackageReference "HotKey" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/soffes/HotKey";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		B38A0C6E2E5CE4A100826D7E /* HotKey */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B38A0C6D2E5CE4A100826D7E /* XCRemoteSwiftPackageReference "HotKey" */;
+			productName = HotKey;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = B3A7E04D2E216D2400785117 /* Project object */;
 }

@@ -9,6 +9,9 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
     // Un seul service de connexion
     private var connectionManager: MiloConnectionManager!
     
+    // Gestionnaire des raccourcis globaux
+    private var hotkeyManager: GlobalHotkeyManager?
+    
     // État simple
     private var isMiloConnected = false
     private var currentState: MiloState?
@@ -31,6 +34,7 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
         
         setupStatusItem()
         setupConnectionManager()
+        setupHotkeyVolumeObserver()
         updateIcon()
     }
     
@@ -56,7 +60,28 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
     private func setupConnectionManager() {
         connectionManager = MiloConnectionManager()
         connectionManager.delegate = self
+        
+        // Initialiser le gestionnaire des raccourcis globaux
+        hotkeyManager = GlobalHotkeyManager(connectionManager: connectionManager)
+        
         connectionManager.start()
+    }
+    
+    private func setupHotkeyVolumeObserver() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleVolumeChangedViaHotkey),
+            name: NSNotification.Name("VolumeChangedViaHotkey"),
+            object: nil
+        )
+    }
+    
+    @objc private func handleVolumeChangedViaHotkey(_ notification: Notification) {
+        guard let volumeStatus = notification.object as? VolumeStatus else { return }
+        
+        currentVolume = volumeStatus
+        volumeController.setCurrentVolume(volumeStatus)
+        volumeController.updateSliderFromWebSocket(volumeStatus.volume)
     }
     
     private func updateIcon() {
@@ -82,7 +107,6 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
         }
     }
     
-    // CORRECTION : Afficher le menu d'abord, refresh après (pas de blocage)
     private func showMenu() {
         let menu = NSMenu()
         menu.font = NSFont.menuFont(ofSize: 13)
@@ -99,13 +123,11 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
         
         displayMenu(menu)
         
-        // MODIFICATION : Refresh en arrière-plan APRÈS avoir affiché le menu
         if isMiloConnected {
             Task {
                 await refreshState()
                 await refreshVolumeStatus()
                 
-                // Mettre à jour le menu si refresh trouve des changements
                 await MainActor.run {
                     if let menu = self.activeMenu {
                         self.updateMenuInRealTime(menu)
@@ -130,7 +152,6 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
         
         displayMenu(menu)
         
-        // MODIFICATION : Refresh en arrière-plan pour les préférences aussi
         if isMiloConnected {
             Task {
                 await refreshState()
@@ -162,7 +183,6 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
     
     // MARK: - Menu Building
     private func buildConnectedMenuWithLoading(_ menu: NSMenu) {
-        // Volume - utilise maintenant currentVolume fraîchement récupéré
         let volumeItems = MenuItemFactory.createVolumeSection(
             volume: currentVolume?.volume ?? 50,
             target: self,
@@ -176,7 +196,6 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
             volumeController.setVolumeSlider(slider)
         }
         
-        // Sources audio
         let sourceItems = MenuItemFactory.createAudioSourcesSectionWithLoading(
             state: currentState,
             loadingStates: loadingStates,
@@ -186,7 +205,6 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
         )
         sourceItems.forEach { menu.addItem($0) }
         
-        // Contrôles système
         let systemItems = MenuItemFactory.createSystemControlsSection(
             state: currentState,
             target: self,
@@ -198,10 +216,16 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
     private func buildConnectedPreferencesMenu(_ menu: NSMenu) {
         buildConnectedMenuWithLoading(menu)
         
-        // Section préférences
         menu.addItem(NSMenuItem.separator())
         
-        // Toggle démarrage automatique
+        let globalHotkeysItem = MenuItemHelper.createSimpleToggleItem(
+            title: "Raccourcis volume (⌥↑/↓)",
+            isEnabled: hotkeyManager?.isCurrentlyMonitoring() ?? false,
+            target: self,
+            action: #selector(toggleGlobalHotkeys)
+        )
+        menu.addItem(globalHotkeysItem)
+        
         let launchAtLoginItem = MenuItemHelper.createSimpleToggleItem(
             title: "Démarrer au démarrage du Mac",
             isEnabled: isLaunchAtLoginEnabled(),
@@ -210,7 +234,6 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
         )
         menu.addItem(launchAtLoginItem)
         
-        // Quitter
         let quitItem = MenuItemHelper.createSimpleMenuItem(
             title: "Quitter",
             target: self,
@@ -246,16 +269,11 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
     }
     
     private func handleMenuClosed() {
-        NSLog("🔐 Menu closing - sending pending volume and cleaning up")
+        NSLog("Menu closing - sending pending volume and cleaning up")
         
-        // ÉTAPE 1 : Envoyer le volume pending AVANT de nettoyer quoi que ce soit
         volumeController.forceSendPendingVolume()
-        
-        // ÉTAPE 2 : Cleanup du controller AVANT de supprimer les références
-        // Comme ça, cleanup() peut encore utiliser activeMenu si nécessaire
         volumeController.cleanup()
         
-        // ÉTAPE 3 : Supprimer les références seulement à la fin
         activeMenu = nil
         isPreferencesMenuActive = false
         volumeController.activeMenu = nil
@@ -278,15 +296,15 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
     // MARK: - Actions
     @objc private func sourceClickedWithLoading(_ sender: NSMenuItem) {
         guard let apiService = connectionManager.getAPIService() else {
-            NSLog("❌ sourceClickedWithLoading: no API service available")
+            NSLog("sourceClickedWithLoading: no API service available")
             return
         }
         guard let sourceId = sender.representedObject as? String else {
-            NSLog("❌ sourceClickedWithLoading: invalid sourceId")
+            NSLog("sourceClickedWithLoading: invalid sourceId")
             return
         }
         
-        NSLog("🎯 sourceClickedWithLoading: \(sourceId)")
+        NSLog("sourceClickedWithLoading: \(sourceId)")
         
         if loadingStates[sourceId] == true { return }
         
@@ -306,11 +324,11 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
         
         Task {
             do {
-                NSLog("📡 Sending changeSource request for: \(sourceId)")
+                NSLog("Sending changeSource request for: \(sourceId)")
                 try await apiService.changeSource(sourceId)
-                NSLog("✅ changeSource request completed for: \(sourceId)")
+                NSLog("changeSource request completed for: \(sourceId)")
             } catch {
-                NSLog("❌ changeSource request failed for \(sourceId): \(error)")
+                NSLog("changeSource request failed for \(sourceId): \(error)")
                 await MainActor.run {
                     self.stopLoadingForSource(sourceId)
                 }
@@ -320,35 +338,35 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
     
     @objc private func toggleClicked(_ sender: NSMenuItem) {
         guard let apiService = connectionManager.getAPIService() else {
-            NSLog("❌ toggleClicked: no API service available")
+            NSLog("toggleClicked: no API service available")
             return
         }
         guard let toggleType = sender.representedObject as? String else {
-            NSLog("❌ toggleClicked: invalid toggleType")
+            NSLog("toggleClicked: invalid toggleType")
             return
         }
         
-        NSLog("🎯 toggleClicked: \(toggleType)")
+        NSLog("toggleClicked: \(toggleType)")
         
         Task {
             do {
                 switch toggleType {
                 case "multiroom":
                     let newState = !(currentState?.multiroomEnabled ?? false)
-                    NSLog("📡 Sending setMultiroom request: \(newState)")
+                    NSLog("Sending setMultiroom request: \(newState)")
                     try await apiService.setMultiroom(newState)
-                    NSLog("✅ setMultiroom request completed: \(newState)")
+                    NSLog("setMultiroom request completed: \(newState)")
                 case "equalizer":
                     let newState = !(currentState?.equalizerEnabled ?? false)
-                    NSLog("📡 Sending setEqualizer request: \(newState)")
+                    NSLog("Sending setEqualizer request: \(newState)")
                     try await apiService.setEqualizer(newState)
-                    NSLog("✅ setEqualizer request completed: \(newState)")
+                    NSLog("setEqualizer request completed: \(newState)")
                 default:
-                    NSLog("❌ Unknown toggle type: \(toggleType)")
+                    NSLog("Unknown toggle type: \(toggleType)")
                     break
                 }
             } catch {
-                NSLog("❌ Toggle request failed for \(toggleType): \(error)")
+                NSLog("Toggle request failed for \(toggleType): \(error)")
             }
         }
     }
@@ -356,6 +374,20 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
     @objc private func volumeChanged(_ sender: NSSlider) {
         let newVolume = Int(sender.doubleValue)
         volumeController.handleVolumeChange(newVolume)
+    }
+    
+    @objc private func toggleGlobalHotkeys() {
+        guard let hotkeyManager = hotkeyManager else { return }
+        
+        if hotkeyManager.isCurrentlyMonitoring() {
+            hotkeyManager.stopMonitoring()
+        } else {
+            hotkeyManager.startMonitoring()
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                hotkeyManager.recheckPermissions()
+            }
+        }
     }
     
     @objc private func toggleLaunchAtLogin() {
@@ -369,7 +401,7 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
                     try service.register()
                 }
             } catch {
-                print("❌ Erreur toggle démarrage: \(error)")
+                print("Erreur toggle démarrage: \(error)")
             }
         } else {
             let bundleIdentifier = Bundle.main.bundleIdentifier ?? ""
@@ -439,17 +471,17 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
 // MARK: - MiloConnectionManagerDelegate
 extension MenuBarController {
     func miloDidConnect() {
-        NSLog("🎉 Milo connected - updating UI")
+        NSLog("Milo connected - updating UI")
         
         isMiloConnected = true
         updateIcon()
         
-        // Configurer le volume controller avec l'API service
         if let apiService = connectionManager.getAPIService() {
             volumeController.apiService = apiService
         }
         
-        // Rafraîchir l'état initial
+        hotkeyManager?.startMonitoring()
+        
         Task {
             await refreshState()
             await refreshVolumeStatus()
@@ -457,17 +489,17 @@ extension MenuBarController {
     }
     
     func miloDidDisconnect() {
-        NSLog("💔 Milo disconnected - updating UI")
+        NSLog("Milo disconnected - updating UI")
+        
+        hotkeyManager?.stopMonitoring()
         
         isMiloConnected = false
         updateIcon()
         
-        // Nettoyer les états
         currentState = nil
         currentVolume = nil
         volumeController.apiService = nil
         
-        // Arrêter tous les loadings
         for (sourceId, _) in loadingStates {
             loadingStates[sourceId] = false
             loadingTimers[sourceId]?.invalidate()
@@ -478,7 +510,6 @@ extension MenuBarController {
         
         volumeController.cleanup()
         
-        // Rafraîchir le menu si ouvert
         if let menu = activeMenu {
             updateMenuInRealTime(menu)
         }
@@ -487,7 +518,6 @@ extension MenuBarController {
     func didReceiveStateUpdate(_ state: MiloState) {
         currentState = state
         
-        // Gérer les loadings terminés
         if !state.isTransitioning {
             for (sourceId, isLoading) in loadingStates {
                 if isLoading && state.activeSource == sourceId {
@@ -507,7 +537,6 @@ extension MenuBarController {
             }
         }
         
-        // Rafraîchir le menu si nécessaire
         let hasActiveLoading = loadingStates.values.contains(true)
         if let menu = activeMenu, !hasActiveLoading {
             updateMenuInRealTime(menu)
@@ -520,7 +549,7 @@ extension MenuBarController {
         volumeController.updateSliderFromWebSocket(volume.volume)
     }
     
-    // MARK: - State Refresh (méthodes existantes avec gestion d'erreur)
+    // MARK: - State Refresh
     private func refreshState() async {
         guard let apiService = connectionManager.getAPIService() else { return }
         
@@ -528,12 +557,11 @@ extension MenuBarController {
             let state = try await apiService.fetchState()
             await MainActor.run {
                 self.currentState = state
-                NSLog("📊 State refreshed: \(state.activeSource)")
+                NSLog("State refreshed: \(state.activeSource)")
             }
         } catch {
-            // CORRECTION : Gestion d'erreur silencieuse pour timeouts
             if (error as NSError).code != NSURLErrorTimedOut {
-                NSLog("❌ State refresh failed: \(error)")
+                NSLog("State refresh failed: \(error)")
             }
         }
     }
@@ -548,16 +576,14 @@ extension MenuBarController {
                 self.currentVolume = volumeStatus
                 self.volumeController.setCurrentVolume(volumeStatus)
                 
-                // CORRECTION : Mettre à jour le slider actif si volume a changé
                 if oldVolume != volumeStatus.volume {
-                    NSLog("🔊 Volume refreshed: \(oldVolume) → \(volumeStatus.volume)")
+                    NSLog("Volume refreshed: \(oldVolume) → \(volumeStatus.volume)")
                     self.volumeController.updateSliderFromWebSocket(volumeStatus.volume)
                 }
             }
         } catch {
-            // CORRECTION : Gestion d'erreur silencieuse pour timeouts
             if (error as NSError).code != NSURLErrorTimedOut {
-                NSLog("❌ Volume refresh failed: \(error)")
+                NSLog("Volume refresh failed: \(error)")
             }
         }
     }

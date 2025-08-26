@@ -29,7 +29,7 @@ class MenuItemFactory {
     
     // MARK: - Disconnected State
     static func createDisconnectedItem() -> NSMenuItem {
-        let item = NSMenuItem(title: "Milō n'est pas allumé", action: nil, keyEquivalent: "")
+        let item = NSMenuItem(title: "Milō n'est pas allumé", action: nil, keyEquivalent: "")
         item.isEnabled = false
         return item
     }
@@ -109,14 +109,15 @@ class MenuItemFactory {
         items.append(sortieHeader)
         
         let activeSource = state?.activeSource ?? "none"
-        let hasAnyLoading = loadingTarget != nil
+        let audioSources = ["librespot", "bluetooth", "roc"]
+        let hasAudioSourceLoading = loadingTarget != nil && audioSources.contains(loadingTarget!)
         
         // Spotify
         let spotifyIsLoading = loadingStates["librespot"] ?? false
         let spotifyIsLoadingTarget = loadingTarget == "librespot"
-        // CORRECTION : Une source n'est active que si elle est active ET qu'il n'y a pas de loading en cours
-        // OU si elle est la cible du loading
-        let spotifyIsActive = spotifyIsLoadingTarget || (!hasAnyLoading && activeSource == "librespot")
+        // Si une autre source audio est en loading, cette source perd immédiatement sa couleur
+        let hasOtherAudioSourceLoading = hasAudioSourceLoading && !spotifyIsLoadingTarget
+        let spotifyIsActive = spotifyIsLoadingTarget || (!spotifyIsLoading && !hasOtherAudioSourceLoading && activeSource == "librespot")
         
         items.append(CircularMenuItem.createWithLoadingSupport(
             with: MenuItemConfig(
@@ -134,7 +135,8 @@ class MenuItemFactory {
         // Bluetooth
         let bluetoothIsLoading = loadingStates["bluetooth"] ?? false
         let bluetoothIsLoadingTarget = loadingTarget == "bluetooth"
-        let bluetoothIsActive = bluetoothIsLoadingTarget || (!hasAnyLoading && activeSource == "bluetooth")
+        let hasOtherAudioSourceLoadingBT = hasAudioSourceLoading && !bluetoothIsLoadingTarget
+        let bluetoothIsActive = bluetoothIsLoadingTarget || (!bluetoothIsLoading && !hasOtherAudioSourceLoadingBT && activeSource == "bluetooth")
         
         items.append(CircularMenuItem.createWithLoadingSupport(
             with: MenuItemConfig(
@@ -152,7 +154,8 @@ class MenuItemFactory {
         // macOS
         let rocIsLoading = loadingStates["roc"] ?? false
         let rocIsLoadingTarget = loadingTarget == "roc"
-        let rocIsActive = rocIsLoadingTarget || (!hasAnyLoading && activeSource == "roc")
+        let hasOtherAudioSourceLoadingROC = hasAudioSourceLoading && !rocIsLoadingTarget
+        let rocIsActive = rocIsLoadingTarget || (!rocIsLoading && !hasOtherAudioSourceLoadingROC && activeSource == "roc")
         
         items.append(CircularMenuItem.createWithLoadingSupport(
             with: MenuItemConfig(
@@ -172,31 +175,67 @@ class MenuItemFactory {
         return items
     }
     
-    // MARK: - System Controls Section
+    // MARK: - System Controls Section (version originale)
     static func createSystemControlsSection(state: MiloState?, target: AnyObject, action: Selector) -> [NSMenuItem] {
+        return createSystemControlsSectionWithLoading(
+            state: state,
+            loadingStates: [:],
+            loadingTarget: nil,
+            target: target,
+            action: action
+        )
+    }
+    
+    // MARK: - System Controls Section (avec support loading)
+    static func createSystemControlsSectionWithLoading(
+        state: MiloState?,
+        loadingStates: [String: Bool],
+        loadingTarget: String?,  // Quelle fonctionnalité est en cours de loading
+        target: AnyObject,
+        action: Selector
+    ) -> [NSMenuItem] {
         var items: [NSMenuItem] = []
         
         // Titre secondaire "Fonctionnalités"
         let featuresHeader = createSecondaryHeader(title: "Fonctionnalités")
         items.append(featuresHeader)
         
-        items.append(CircularMenuItem.create(with: MenuItemConfig(
-            title: "Multiroom",
-            iconName: "speaker.wave.3",
-            isActive: state?.multiroomEnabled ?? false,
-            target: target,
-            action: action,
-            representedObject: "multiroom"
-        )))
+        // Multiroom
+        let multiroomIsLoading = loadingStates["multiroom"] ?? false
+        let multiroomIsLoadingTarget = loadingTarget == "multiroom"
+        // CORRECTION : Si c'est la cible du loading → actif, sinon utiliser l'état réel
+        let multiroomIsActive = multiroomIsLoadingTarget || (!multiroomIsLoading && (state?.multiroomEnabled ?? false))
         
-        items.append(CircularMenuItem.create(with: MenuItemConfig(
-            title: "Égaliseur",
-            iconName: "slider.horizontal.3",
-            isActive: state?.equalizerEnabled ?? false,
-            target: target,
-            action: action,
-            representedObject: "equalizer"
-        )))
+        items.append(CircularMenuItem.createWithLoadingSupport(
+            with: MenuItemConfig(
+                title: "Multiroom",
+                iconName: "speaker.wave.3",
+                isActive: multiroomIsActive,
+                target: target,
+                action: action,
+                representedObject: "multiroom"
+            ),
+            isLoading: multiroomIsLoading,
+            loadingIsActive: multiroomIsLoadingTarget
+        ))
+        
+        // Égaliseur
+        let equalizerIsLoading = loadingStates["equalizer"] ?? false
+        let equalizerIsLoadingTarget = loadingTarget == "equalizer"
+        let equalizerIsActive = equalizerIsLoadingTarget || (!equalizerIsLoading && (state?.equalizerEnabled ?? false))
+        
+        items.append(CircularMenuItem.createWithLoadingSupport(
+            with: MenuItemConfig(
+                title: "Égaliseur",
+                iconName: "slider.horizontal.3",
+                isActive: equalizerIsActive,
+                target: target,
+                action: action,
+                representedObject: "equalizer"
+            ),
+            isLoading: equalizerIsLoading,
+            loadingIsActive: equalizerIsLoadingTarget
+        ))
         
         return items
     }

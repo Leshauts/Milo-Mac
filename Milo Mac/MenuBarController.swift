@@ -215,10 +215,13 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
         )
         sourceItems.forEach { menu.addItem($0) }
         
-        let systemItems = MenuItemFactory.createSystemControlsSection(
+        // MODIFICATION : Utiliser la nouvelle méthode avec support loading
+        let systemItems = MenuItemFactory.createSystemControlsSectionWithLoading(
             state: currentState,
+            loadingStates: loadingStates,
+            loadingTarget: loadingTarget,
             target: self,
-            action: #selector(toggleClicked)
+            action: #selector(toggleClickedWithLoading)
         )
         systemItems.forEach { menu.addItem($0) }
     }
@@ -335,24 +338,53 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
         }
     }
     
-    @objc private func toggleClicked(_ sender: NSMenuItem) {
+    @objc private func toggleClickedWithLoading(_ sender: NSMenuItem) {
         guard let apiService = connectionManager.getAPIService() else { return }
         guard let toggleType = sender.representedObject as? String else { return }
+        
+        // Éviter les actions multiples
+        if loadingStates[toggleType] == true { return }
+        
+        // Éviter de toggler si déjà dans l'état souhaité pendant un autre loading
+        let currentlyEnabled: Bool
+        switch toggleType {
+        case "multiroom":
+            currentlyEnabled = currentState?.multiroomEnabled ?? false
+        case "equalizer":
+            currentlyEnabled = currentState?.equalizerEnabled ?? false
+        default:
+            return
+        }
+        
+        // Marquer comme en cours de loading
+        loadingTarget = toggleType
+        loadingStartTimes[toggleType] = Date()
+        setLoadingState(for: toggleType, isLoading: true)
+        
+        // Timer de sécurité (timeout)
+        loadingTimers[toggleType]?.invalidate()
+        loadingTimers[toggleType] = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: false) { _ in
+            Task { @MainActor in
+                self.stopLoadingForToggle(toggleType)
+            }
+        }
         
         Task {
             do {
                 switch toggleType {
                 case "multiroom":
-                    let newState = !(currentState?.multiroomEnabled ?? false)
+                    let newState = !currentlyEnabled
                     try await apiService.setMultiroom(newState)
                 case "equalizer":
-                    let newState = !(currentState?.equalizerEnabled ?? false)
+                    let newState = !currentlyEnabled
                     try await apiService.setEqualizer(newState)
                 default:
                     break
                 }
             } catch {
-                // Handle error silently
+                await MainActor.run {
+                    self.stopLoadingForToggle(toggleType)
+                }
             }
         }
     }
@@ -433,6 +465,18 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
         }
     }
     
+    // MARK: - Loading State Management (méthode additionnelle pour toggles)
+    private func stopLoadingForToggle(_ toggleType: String) {
+        setLoadingState(for: toggleType, isLoading: false)
+        loadingTimers[toggleType]?.invalidate()
+        loadingTimers[toggleType] = nil
+        loadingStartTimes[toggleType] = nil
+        
+        if loadingTarget == toggleType {
+            loadingTarget = nil
+        }
+    }
+    
     private func updateMenuInRealTime(_ menu: NSMenu) {
         CircularMenuItem.cleanupAllSpinners()
         
@@ -500,6 +544,7 @@ extension MenuBarController {
     func didReceiveStateUpdate(_ state: MiloState) {
         currentState = state
         
+        // Gérer la fin du loading pour les sources audio
         if !state.isTransitioning {
             for (sourceId, isLoading) in loadingStates {
                 if isLoading && state.activeSource == sourceId {
@@ -513,6 +558,39 @@ extension MenuBarController {
                         let remainingTime = minimumDuration - elapsed
                         DispatchQueue.main.asyncAfter(deadline: .now() + remainingTime) { [weak self] in
                             self?.stopLoadingForSource(sourceId)
+                        }
+                    }
+                }
+            }
+        }
+        
+        // NOUVEAU : Gérer la fin du loading pour les toggles système
+        // Les toggles se terminent dès qu'on reçoit une mise à jour d'état
+        for (toggleId, isLoading) in loadingStates {
+            if isLoading && ["multiroom", "equalizer"].contains(toggleId) {
+                // Vérifier si l'état a changé comme attendu
+                let hasChanged: Bool
+                switch toggleId {
+                case "multiroom":
+                    // Le loading se termine quand on reçoit n'importe quelle mise à jour d'état
+                    hasChanged = true
+                case "equalizer":
+                    hasChanged = true
+                default:
+                    hasChanged = false
+                }
+                
+                if hasChanged {
+                    let startTime = loadingStartTimes[toggleId] ?? Date()
+                    let elapsed = Date().timeIntervalSince(startTime)
+                    let minimumDuration: TimeInterval = 1.0
+                    
+                    if elapsed >= minimumDuration {
+                        stopLoadingForToggle(toggleId)
+                    } else {
+                        let remainingTime = minimumDuration - elapsed
+                        DispatchQueue.main.asyncAfter(deadline: .now() + remainingTime) { [weak self] in
+                            self?.stopLoadingForToggle(toggleId)
                         }
                     }
                 }

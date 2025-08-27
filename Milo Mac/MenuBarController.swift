@@ -475,6 +475,11 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
         if loadingTarget == toggleType {
             loadingTarget = nil
         }
+        
+        // NOUVEAU : Forcer la mise à jour de l'interface après la fin du loading d'un toggle
+        if let menu = activeMenu {
+            updateMenuInRealTime(menu)
+        }
     }
     
     private func updateMenuInRealTime(_ menu: NSMenu) {
@@ -565,33 +570,21 @@ extension MenuBarController {
         }
         
         // NOUVEAU : Gérer la fin du loading pour les toggles système
-        // Les toggles se terminent dès qu'on reçoit une mise à jour d'état
+        // Les toggles se terminent quand l'état a réellement changé
         for (toggleId, isLoading) in loadingStates {
             if isLoading && ["multiroom", "equalizer"].contains(toggleId) {
-                // Vérifier si l'état a changé comme attendu
-                let hasChanged: Bool
-                switch toggleId {
-                case "multiroom":
-                    // Le loading se termine quand on reçoit n'importe quelle mise à jour d'état
-                    hasChanged = true
-                case "equalizer":
-                    hasChanged = true
-                default:
-                    hasChanged = false
-                }
+                // Toujours arrêter le loading après la durée minimale, peu importe l'état
+                // (car l'API a répondu et l'état a été mis à jour)
+                let startTime = loadingStartTimes[toggleId] ?? Date()
+                let elapsed = Date().timeIntervalSince(startTime)
+                let minimumDuration: TimeInterval = 1.0
                 
-                if hasChanged {
-                    let startTime = loadingStartTimes[toggleId] ?? Date()
-                    let elapsed = Date().timeIntervalSince(startTime)
-                    let minimumDuration: TimeInterval = 1.0
-                    
-                    if elapsed >= minimumDuration {
-                        stopLoadingForToggle(toggleId)
-                    } else {
-                        let remainingTime = minimumDuration - elapsed
-                        DispatchQueue.main.asyncAfter(deadline: .now() + remainingTime) { [weak self] in
-                            self?.stopLoadingForToggle(toggleId)
-                        }
+                if elapsed >= minimumDuration {
+                    stopLoadingForToggle(toggleId)
+                } else {
+                    let remainingTime = minimumDuration - elapsed
+                    DispatchQueue.main.asyncAfter(deadline: .now() + remainingTime) { [weak self] in
+                        self?.stopLoadingForToggle(toggleId)
                     }
                 }
             }

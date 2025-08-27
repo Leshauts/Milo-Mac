@@ -6,12 +6,18 @@ class GlobalHotkeyManager {
     private var volumeUpHotKey: HotKey?
     private var volumeDownHotKey: HotKey?
     private weak var connectionManager: MiloConnectionManager?
-    private weak var menuController: MenuBarController?  // NOUVEAU: Référence vers le contrôleur de menu
+    private weak var menuController: MenuBarController?
     private var isMonitoring = false
+    
+    // NOUVEAU: Instance de VolumeHUD
+    private var volumeHUD: VolumeHUD?
     
     init(connectionManager: MiloConnectionManager, menuController: MenuBarController) {
         self.connectionManager = connectionManager
-        self.menuController = menuController  // NOUVEAU: Stocker la référence
+        self.menuController = menuController
+        
+        // NOUVEAU: Initialiser le VolumeHUD
+        self.volumeHUD = VolumeHUD()
     }
     
     func startMonitoring() {
@@ -46,9 +52,9 @@ class GlobalHotkeyManager {
     }
     
     private func handleVolumeAdjustment(delta: Int, direction: String) {
-        // NOUVEAU: Vérifier si le menu est ouvert avant de traiter le raccourci
+        // Vérifier si le menu est ouvert avant de traiter le raccourci
         if let menuController = menuController, menuController.isMenuCurrentlyOpen() {
-            NSSound.beep()  // Feedback audio pour indiquer que le raccourci est bloqué
+            NSSound.beep()
             return
         }
         
@@ -62,12 +68,36 @@ class GlobalHotkeyManager {
         Task {
             do {
                 try await apiService.adjustVolume(delta)
+                
+                // NOUVEAU: Récupérer le volume mis à jour et afficher la HUD
+                await updateVolumeHUDAfterChange()
+                
+                // Conserver l'ancienne logique pour le slider du menu
                 await updateSliderAfterVolumeChange()
             } catch {
                 await MainActor.run {
                     NSSound.beep()
                 }
             }
+        }
+    }
+    
+    // NOUVEAU: Méthode pour mettre à jour la VolumeHUD
+    @MainActor
+    private func updateVolumeHUDAfterChange() async {
+        guard let apiService = connectionManager?.getAPIService(),
+              let volumeHUD = volumeHUD else { return }
+        
+        do {
+            let volumeStatus = try await apiService.getVolumeStatus()
+            
+            // Afficher la HUD avec le volume mis à jour
+            volumeHUD.show(volume: volumeStatus.volume)
+            
+        } catch {
+            // En cas d'erreur, on peut essayer d'estimer le volume
+            // ou simplement ignorer l'affichage de la HUD
+            NSLog("Erreur lors de la récupération du volume pour la HUD: \(error)")
         }
     }
     

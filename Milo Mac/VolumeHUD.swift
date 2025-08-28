@@ -35,7 +35,6 @@ class VolumeHUD {
         window.ignoresMouseEvents = true
         window.collectionBehavior = [.canJoinAllSpaces, .stationary]
         
-        // Positionner au centre en haut, mais décalé vers le haut pour l'animation
         if let screen = NSScreen.main {
             let screenRect = screen.visibleFrame
             let windowRect = NSRect(
@@ -47,23 +46,18 @@ class VolumeHUD {
             window.setFrame(windowRect, display: false)
         }
         
-        // Initialement invisible et décalé vers le haut
         window.alphaValue = 0
     }
     
     private func setupViews() {
         guard let window = window else { return }
         
-        // Container avec effet blur natif macOS
         containerView = NSVisualEffectView(frame: NSRect(x: 0, y: 0, width: windowWidth, height: windowHeight))
         guard let containerView = containerView else { return }
         
-        // Configuration de l'effet blur
         containerView.material = .hudWindow
         containerView.blendingMode = .behindWindow
         containerView.state = .active
-        
-        // Styling du container
         containerView.wantsLayer = true
         containerView.layer?.cornerRadius = cornerRadius
         containerView.layer?.borderWidth = 2
@@ -71,7 +65,7 @@ class VolumeHUD {
         
         window.contentView = containerView
         
-        // Slider background - centré dans le container
+        // Slider background
         let sliderContainer = NSView(frame: NSRect(
             x: 16, y: (windowHeight - sliderHeight) / 2,
             width: windowWidth - 32,
@@ -83,7 +77,7 @@ class VolumeHUD {
         
         containerView.addSubview(sliderContainer)
         
-        // Fill view
+        // Fill view simple
         fillView = NSView(frame: NSRect(x: 0, y: 0, width: 0, height: sliderHeight))
         guard let fillView = fillView else { return }
         
@@ -93,18 +87,16 @@ class VolumeHUD {
         
         sliderContainer.addSubview(fillView)
         
-        // Volume label avec Space Mono
+        // Volume label
         volumeLabel = NSTextField(labelWithString: "50 %")
         guard let volumeLabel = volumeLabel else { return }
         
-        // Essayer d'utiliser Space Mono, sinon fallback sur SF Mono
         let spaceMono = NSFont(name: "Space Mono", size: 16) ??
                        NSFont.monospacedSystemFont(ofSize: 16, weight: .regular)
         volumeLabel.font = spaceMono
         
-        // Appliquer le letter-spacing de -2%
         let attributedString = NSMutableAttributedString(string: "50 %")
-        attributedString.addAttribute(.kern, value: -0.32, range: NSRange(location: 0, length: attributedString.length)) // -2% de 16px = -0.32
+        attributedString.addAttribute(.kern, value: -0.32, range: NSRange(location: 0, length: attributedString.length))
         volumeLabel.attributedStringValue = attributedString
         
         volumeLabel.textColor = NSColor.secondaryLabelColor
@@ -115,27 +107,19 @@ class VolumeHUD {
         
         sliderContainer.addSubview(volumeLabel)
         
-        // Initialiser la fenêtre comme invisible (pas de décalage initial)
         window.alphaValue = 0
     }
     
     func show(volume: Int) {
         guard let window = window else { return }
         
-        // Mettre à jour le volume
         updateVolume(volume)
-        
-        // Annuler le timer précédent
         hideTimer?.invalidate()
-        
-        // Montrer la fenêtre
         window.orderFrontRegardless()
         
-        // Animation d'entrée avec fade uniquement
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.3
             context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-            
             window.animator().alphaValue = 1.0
         }
         
@@ -146,38 +130,39 @@ class VolumeHUD {
         guard let fillView = fillView,
               let volumeLabel = volumeLabel else { return }
         
-        // Mettre à jour le texte avec Space Mono et letter-spacing
+        // --- Mise à jour du texte ---
         let volumeText = "\(volume) %"
         let spaceMono = NSFont(name: "Space Mono", size: 16) ??
                        NSFont.monospacedSystemFont(ofSize: 16, weight: .regular)
-        
         let attributedString = NSMutableAttributedString(string: volumeText)
         attributedString.addAttribute(.font, value: spaceMono, range: NSRange(location: 0, length: attributedString.length))
         attributedString.addAttribute(.foregroundColor, value: NSColor.secondaryLabelColor, range: NSRange(location: 0, length: attributedString.length))
-        attributedString.addAttribute(.kern, value: -0.32, range: NSRange(location: 0, length: attributedString.length)) // -2% de 16px = -0.32
-        
+        attributedString.addAttribute(.kern, value: -0.32, range: NSRange(location: 0, length: attributedString.length))
         volumeLabel.attributedStringValue = attributedString
         
-        let sliderWidth = windowWidth - 64
-        let isCircleMode = volume < 10
+        // --- Calcul largeur/position ---
+        let sliderWidth = windowWidth - 32
+        let targetWidth = (CGFloat(volume) / 100.0) * sliderWidth
         
         let fillWidth: CGFloat
         let fillX: CGFloat
         
-        if isCircleMode {
-            // Mode cercle : largeur fixe de 32px, position qui se décale vers la gauche
-            fillWidth = 32
-            // Calculer le décalage : plus le volume est bas, plus c'est décalé à gauche
-            let maxLeftOffset: CGFloat = 32
-            let volumeRatio = CGFloat(volume) / 10.0 // ratio entre 0 et 1 pour volumes 0-10
-            fillX = -maxLeftOffset + (volumeRatio * maxLeftOffset)
-        } else {
-            // Mode normal : largeur proportionnelle au volume
-            fillWidth = (CGFloat(volume) / 100.0) * sliderWidth
+        if targetWidth >= sliderHeight {
+            // Cas normal
+            fillWidth = targetWidth
             fillX = 0
+        } else {
+            // Cas spécial : largeur fixée au diamètre (cercle)
+            fillWidth = sliderHeight
+            
+            // Décalage progressif vers la gauche
+            // 0% volume = entièrement caché, 100% du seuil (sliderHeight) = visible
+            let ratio = targetWidth / sliderHeight // entre 0 et 1
+            let maxOffset = sliderHeight // déplacement max vers la gauche
+            fillX = -(1 - ratio) * maxOffset
         }
         
-        // Animation fluide de la barre
+        // --- Animation fluide ---
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.2
             context.timingFunction = CAMediaTimingFunction(name: .easeOut)
@@ -203,23 +188,13 @@ class VolumeHUD {
         hideTimer?.invalidate()
         hideTimer = nil
         
-        // Animation de sortie avec fade uniquement
         NSAnimationContext.runAnimationGroup({ context in
             context.duration = 0.3
             context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-            
             window.animator().alphaValue = 0.0
-            
         }) {
-            // Cacher la fenêtre après l'animation
             window.orderOut(nil)
         }
-    }
-    
-    // Fonction pour prolonger l'affichage et mettre à jour le volume
-    func extendDisplay(volume: Int) {
-        updateVolume(volume)
-        scheduleHide()
     }
     
     deinit {

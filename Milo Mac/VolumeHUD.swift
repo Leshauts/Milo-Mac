@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import CoreText
 
 class VolumeHUD {
     private var window: NSWindow?
@@ -16,6 +17,18 @@ class VolumeHUD {
     init() {
         setupWindow()
         setupViews()
+    }
+    
+    // Fonction pour obtenir la police Space Mono
+    private func getSpaceMonoFont(size: CGFloat) -> NSFont {
+        // Nom exact de la police (trouvé dans les informations du fichier)
+        if let font = NSFont(name: "Space Mono Regular", size: size) {
+            // print("✅ Space Mono trouvée avec le nom: Space Mono Regular")
+            return font
+        }
+        
+        print("⚠️ Space Mono non trouvée, utilisation de la police système monospace")
+        return NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
     }
     
     private func setupWindow() {
@@ -87,20 +100,20 @@ class VolumeHUD {
         
         sliderContainer.addSubview(fillView)
         
-        // Volume label
+        // Volume label avec Space Mono
         volumeLabel = NSTextField(labelWithString: "50 %")
         guard let volumeLabel = volumeLabel else { return }
         
-        let spaceMono = NSFont(name: "Space Mono", size: 16) ??
-                       NSFont.monospacedSystemFont(ofSize: 16, weight: .regular)
-        volumeLabel.font = spaceMono
+        let spaceMonoFont = getSpaceMonoFont(size: 16)
+        volumeLabel.font = spaceMonoFont
         
         let attributedString = NSMutableAttributedString(string: "50 %")
+        attributedString.addAttribute(.font, value: spaceMonoFont, range: NSRange(location: 0, length: attributedString.length))
         attributedString.addAttribute(.kern, value: -0.32, range: NSRange(location: 0, length: attributedString.length))
         volumeLabel.attributedStringValue = attributedString
         
         volumeLabel.textColor = NSColor.secondaryLabelColor
-        volumeLabel.frame = NSRect(x: 14, y: (sliderHeight - 16) / 2, width: 80, height: 17.5)
+        volumeLabel.frame = NSRect(x: 14, y: (sliderHeight - 16) / 2, width: 80, height: 20)
         volumeLabel.alignment = .left
         volumeLabel.backgroundColor = NSColor.clear
         volumeLabel.isBordered = false
@@ -130,12 +143,12 @@ class VolumeHUD {
         guard let fillView = fillView,
               let volumeLabel = volumeLabel else { return }
         
-        // --- Mise à jour du texte ---
+        // --- Mise à jour du texte avec Space Mono ---
         let volumeText = "\(volume) %"
-        let spaceMono = NSFont(name: "Space Mono", size: 16) ??
-                       NSFont.monospacedSystemFont(ofSize: 16, weight: .regular)
+        let spaceMonoFont = getSpaceMonoFont(size: 16)
+        
         let attributedString = NSMutableAttributedString(string: volumeText)
-        attributedString.addAttribute(.font, value: spaceMono, range: NSRange(location: 0, length: attributedString.length))
+        attributedString.addAttribute(.font, value: spaceMonoFont, range: NSRange(location: 0, length: attributedString.length))
         attributedString.addAttribute(.foregroundColor, value: NSColor.secondaryLabelColor, range: NSRange(location: 0, length: attributedString.length))
         attributedString.addAttribute(.kern, value: -0.32, range: NSRange(location: 0, length: attributedString.length))
         volumeLabel.attributedStringValue = attributedString

@@ -4,5 +4,15 @@
 <dict>
 	<key></key>
 	<string></string>
+	<key>ATSApplicationFontsPath</key>
+	<string>.</string>
+	<key>CFBundleGetInfoString</key>
+	<string></string>
+	<key>CFBundleSignature</key>
+	<false/>
+	<key>UIAppFonts</key>
+	<array>
+		<string>Fonts/SpaceMono-Regular.ttf</string>
+	</array>
 </dict>
 </plist>

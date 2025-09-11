@@ -29,6 +29,15 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
+		B32C2A1C2E72E054003BF59D /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = Fonts;
+			dstSubfolderSpec = 7;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		B372DB1F2E5E5B7F00F43A55 /* Embed XPC Services */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -48,9 +57,25 @@
 		B3A7E06D2E216D2500785117 /* Milo MacUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Milo MacUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		B32C29ED2E72DFBB003BF59D /* Exceptions for "Milo Mac" folder in "Milo Mac" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				.smbdeleteAAA6d5ee8,
+				.smbdeleteAAA6d08b1,
+				.smbdeleteAAA6d67e0,
+				.smbdeleteAAA6d5679,
+			);
+			target = B3A7E0542E216D2400785117 /* Milo Mac */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		B3A7E0572E216D2400785117 /* Milo Mac */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				B32C29ED2E72DFBB003BF59D /* Exceptions for "Milo Mac" folder in "Milo Mac" target */,
+			);
 			path = "Milo Mac";
 			sourceTree = "<group>";
 		};
@@ -124,6 +149,7 @@
 				B3A7E0522E216D2400785117 /* Frameworks */,
 				B3A7E0532E216D2400785117 /* Resources */,
 				B372DB1F2E5E5B7F00F43A55 /* Embed XPC Services */,
+				B32C2A1C2E72E054003BF59D /* CopyFiles */,
 			);
 			buildRules = (
 			);

@@ -5,6 +5,7 @@
 !*.xcworkspace/contents.xcworkspacedata
 *.xcuserstate
 *.xcuserdatad
+*.smbdelete*
 
 # Build products
 build/

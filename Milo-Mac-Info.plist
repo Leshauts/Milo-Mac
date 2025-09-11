@@ -2,17 +2,32 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key></key>
-	<string></string>
-	<key>ATSApplicationFontsPath</key>
-	<string>.</string>
-	<key>CFBundleGetInfoString</key>
-	<string></string>
-	<key>CFBundleSignature</key>
-	<false/>
-	<key>UIAppFonts</key>
-	<array>
-		<string>Fonts/SpaceMono-Regular.ttf</string>
-	</array>
+    <key>ATSApplicationFontsPath</key>
+    <string>.</string>
+    <key>CFBundleDocumentTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>oii</string>
+            <key>CFBundleTypeRole</key>
+            <string>Editor</string>
+            <key>LSHandlerRank</key>
+            <string>Default</string>
+        </dict>
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>iii</string>
+            <key>CFBundleTypeRole</key>
+            <string>Editor</string>
+            <key>LSHandlerRank</key>
+            <string>Default</string>
+        </dict>
+    </array>
+    <key>CFBundleGetInfoString</key>
+    <string>Milo Mac Audio Controller</string>
+    <key>UIAppFonts</key>
+    <array>
+        <string>Fonts/SpaceMono-Regular.ttf</string>
+    </array>
 </dict>
 </plist>

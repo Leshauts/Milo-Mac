@@ -113,7 +113,7 @@ class VolumeHUD {
         volumeLabel.attributedStringValue = attributedString
         
         volumeLabel.textColor = NSColor.secondaryLabelColor
-        volumeLabel.frame = NSRect(x: 14, y: (sliderHeight - 16) / 2, width: 80, height: 20)
+        volumeLabel.frame = NSRect(x: 14, y: (sliderHeight - 16) / 2, width: 80, height: 20.5)
         volumeLabel.alignment = .left
         volumeLabel.backgroundColor = NSColor.clear
         volumeLabel.isBordered = false

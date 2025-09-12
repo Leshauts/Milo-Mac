@@ -38,7 +38,6 @@ class GlobalHotkeyManager {
         self.connectionManager = connectionManager
         self.menuController = menuController
         self.volumeHUD = VolumeHUD()
-        setupEventMonitoring()
     }
     
     func startMonitoring() {
@@ -46,7 +45,9 @@ class GlobalHotkeyManager {
             requestAccessibilityPermissions()
             return
         }
+        
         isMonitoring = true
+        setupEventMonitoring()
         setupEventTap()
     }
     
@@ -57,12 +58,30 @@ class GlobalHotkeyManager {
     }
     
     private func setupEventMonitoring() {
+        // Nettoyer l'ancien monitor s'il existe
+        if let monitor = flagsChangedMonitor {
+            NSEvent.removeMonitor(monitor)
+            flagsChangedMonitor = nil
+        }
+        
+        // Créer le nouveau monitor
         flagsChangedMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.flagsChanged]) { [weak self] event in
             self?.handleFlagsChanged(event)
         }
     }
     
     private func setupEventTap() {
+        // Nettoyer l'ancien event tap s'il existe
+        cleanupEventTap()
+        
+        guard AXIsProcessTrusted() else {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                guard let self = self, self.isMonitoring else { return }
+                self.setupEventTap()
+            }
+            return
+        }
+        
         let eventMask = (1 << CGEventType.keyDown.rawValue) | (1 << CGEventType.keyUp.rawValue)
         
         guard let eventTap = CGEvent.tapCreate(
@@ -264,17 +283,21 @@ class GlobalHotkeyManager {
         }
     }
     
+    private func cleanupEventTap() {
+        if let eventTap = eventTap {
+            CGEvent.tapEnable(tap: eventTap, enable: false)
+            CFMachPortInvalidate(eventTap)
+            self.eventTap = nil
+        }
+    }
+    
     private func removeEventMonitors() {
         if let monitor = flagsChangedMonitor {
             NSEvent.removeMonitor(monitor)
             flagsChangedMonitor = nil
         }
         
-        if let eventTap = eventTap {
-            CGEvent.tapEnable(tap: eventTap, enable: false)
-            CFMachPortInvalidate(eventTap)
-            self.eventTap = nil
-        }
+        cleanupEventTap()
     }
     
     private func requestAccessibilityPermissions() {
@@ -286,6 +309,7 @@ class GlobalHotkeyManager {
         
         if result {
             isMonitoring = true
+            setupEventMonitoring()
             setupEventTap()
         } else {
             startPermissionMonitoring()
@@ -297,6 +321,7 @@ class GlobalHotkeyManager {
             if AXIsProcessTrusted() {
                 timer.invalidate()
                 self?.isMonitoring = true
+                self?.setupEventMonitoring()
                 self?.setupEventTap()
             }
         }
@@ -311,8 +336,11 @@ class GlobalHotkeyManager {
     }
     
     func recheckPermissions() {
-        if AXIsProcessTrusted() && !isMonitoring {
-            isMonitoring = true
+        if AXIsProcessTrusted() {
+            if !isMonitoring {
+                isMonitoring = true
+            }
+            setupEventMonitoring()
             setupEventTap()
         }
     }

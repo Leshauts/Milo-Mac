@@ -1,28 +1,175 @@
 import SwiftUI
 import AppKit
 
-// MARK: - Menu Item Factory
 class MenuItemFactory {
+    // MARK: - Constants
     private static let iconSize: CGFloat = 16
     private static let circleSize: CGFloat = 26
     private static let circleMargin: CGFloat = 3
     private static let containerWidth: CGFloat = 300
     private static let containerHeight: CGFloat = 32
+    private static let sideMargin: CGFloat = 12
+    private static let rightMargin: CGFloat = 14
     
     // MARK: - Volume Section
     static func createVolumeSection(volume: Int, target: AnyObject, action: Selector) -> [NSMenuItem] {
+        return [
+            createVolumeHeader(),
+            createVolumeSlider(volume: volume, target: target, action: action),
+            NSMenuItem.separator()
+        ]
+    }
+    
+    private static func createVolumeHeader() -> NSMenuItem {
+        let item = NSMenuItem()
+        let headerView = NSView(frame: NSRect(x: 0, y: 0, width: containerWidth, height: 28))
+        
+        let titleLabel = createLabel(text: "Volume de Milō", font: .systemFont(ofSize: 13, weight: .semibold))
+        titleLabel.frame = NSRect(x: sideMargin, y: 4, width: 160, height: 16)
+        
+        headerView.addSubview(titleLabel)
+        item.view = headerView
+        
+        return item
+    }
+    
+    private static func createVolumeSlider(volume: Int, target: AnyObject, action: Selector) -> NSMenuItem {
+        let item = NSMenuItem()
+        let containerView = MenuInteractionView(frame: NSRect(x: 0, y: 0, width: containerWidth, height: 31))
+        
+        let slider = NativeVolumeSlider(frame: NSRect(x: rightMargin, y: 5, width: containerWidth - (rightMargin * 2), height: 22))
+        slider.doubleValue = Double(volume)
+        slider.target = target
+        slider.action = action
+        
+        containerView.addSubview(slider)
+        item.view = containerView
+        
+        return item
+    }
+    
+    // MARK: - Configuration Items
+    static func createVolumeDeltaConfigItem(currentDelta: Int, target: AnyObject, decreaseAction: Selector, increaseAction: Selector) -> NSMenuItem {
+        let item = NSMenuItem()
+        let containerView = MenuInteractionView(frame: NSRect(x: 0, y: 0, width: containerWidth, height: containerHeight))
+        
+        let titleLabel = createLabel(text: "Incrément volume", font: .menuFont(ofSize: 13))
+        titleLabel.frame = NSRect(x: sideMargin, y: 8, width: 120, height: 16)
+        
+        let controls = createDeltaControls(currentDelta: currentDelta, target: target, decreaseAction: decreaseAction, increaseAction: increaseAction)
+        
+        containerView.addSubview(titleLabel)
+        controls.forEach { containerView.addSubview($0) }
+        
+        item.view = containerView
+        item.representedObject = [
+            "decrease": controls[1], // decreaseButton
+            "increase": controls[2], // increaseButton
+            "value": controls[0]     // valueLabel
+        ]
+        
+        return item
+    }
+    
+    private static func createDeltaControls(currentDelta: Int, target: AnyObject, decreaseAction: Selector, increaseAction: Selector) -> [NSView] {
+        let valueLabel = createLabel(text: "\(currentDelta)", font: .monospacedDigitSystemFont(ofSize: 13, weight: .medium))
+        valueLabel.alignment = .center
+        valueLabel.frame = NSRect(x: containerWidth - 66, y: 8, width: 24, height: 16)
+        
+        let decreaseButton = createDeltaButton(title: "−", target: target, action: decreaseAction, enabled: currentDelta > 1)
+        decreaseButton.frame = NSRect(x: containerWidth - 94, y: 6, width: 24, height: 20)
+        
+        let increaseButton = createDeltaButton(title: "+", target: target, action: increaseAction, enabled: currentDelta < 10)
+        increaseButton.frame = NSRect(x: containerWidth - 38, y: 6, width: 24, height: 20)
+        
+        return [valueLabel, decreaseButton, increaseButton]
+    }
+    
+    private static func createDeltaButton(title: String, target: AnyObject, action: Selector, enabled: Bool) -> NSButton {
+        let button = NSButton(frame: .zero)
+        button.title = title
+        button.font = NSFont.systemFont(ofSize: 14, weight: .medium)
+        button.bezelStyle = .rounded
+        button.controlSize = .mini
+        button.target = target
+        button.action = action
+        button.isEnabled = enabled
+        return button
+    }
+    
+    // MARK: - Audio Sources Section
+    static func createAudioSourcesSection(state: MiloState?, loadingStates: [String: Bool] = [:], loadingTarget: String? = nil, target: AnyObject, action: Selector) -> [NSMenuItem] {
         var items: [NSMenuItem] = []
         
-        // Header "Volume"
-        let header = createVolumeHeader()
-        items.append(header)
+        items.append(createSecondaryHeader(title: "Sortie"))
         
-        // Slider
-        let sliderItem = createVolumeSlider(volume: volume, target: target, action: action)
-        items.append(sliderItem)
+        let activeSource = state?.activeSource ?? "none"
+        let audioSources = ["librespot", "bluetooth", "roc"]
+        let hasAudioSourceLoading = loadingTarget != nil && audioSources.contains(loadingTarget!)
         
-        // Séparateur
+        let sourceConfigs = [
+            ("Spotify", "music.note", "librespot"),
+            ("Bluetooth", "bluetooth", "bluetooth"),
+            ("macOS", "desktopcomputer", "roc")
+        ]
+        
+        for (title, iconName, sourceId) in sourceConfigs {
+            let isLoading = loadingStates[sourceId] ?? false
+            let isLoadingTarget = loadingTarget == sourceId
+            let hasOtherAudioSourceLoading = hasAudioSourceLoading && !isLoadingTarget
+            let isActive = isLoadingTarget || (!isLoading && !hasOtherAudioSourceLoading && activeSource == sourceId)
+            
+            let config = MenuItemConfig(
+                title: title,
+                iconName: iconName,
+                isActive: isActive,
+                target: target,
+                action: action,
+                representedObject: sourceId
+            )
+            
+            items.append(CircularMenuItem.createWithLoadingSupport(
+                with: config,
+                isLoading: isLoading,
+                loadingIsActive: isLoadingTarget
+            ))
+        }
+        
         items.append(NSMenuItem.separator())
+        return items
+    }
+    
+    // MARK: - System Controls Section
+    static func createSystemControlsSection(state: MiloState?, loadingStates: [String: Bool] = [:], loadingTarget: String? = nil, target: AnyObject, action: Selector) -> [NSMenuItem] {
+        var items: [NSMenuItem] = []
+        
+        items.append(createSecondaryHeader(title: "Fonctionnalités"))
+        
+        let systemConfigs = [
+            ("Multiroom", "speaker.wave.3", "multiroom", state?.multiroomEnabled ?? false),
+            ("Égaliseur", "slider.horizontal.3", "equalizer", state?.equalizerEnabled ?? false)
+        ]
+        
+        for (title, iconName, toggleId, currentlyEnabled) in systemConfigs {
+            let isLoading = loadingStates[toggleId] ?? false
+            let isLoadingTarget = loadingTarget == toggleId
+            let isActive = isLoadingTarget || (!isLoading && currentlyEnabled)
+            
+            let config = MenuItemConfig(
+                title: title,
+                iconName: iconName,
+                isActive: isActive,
+                target: target,
+                action: action,
+                representedObject: toggleId
+            )
+            
+            items.append(CircularMenuItem.createWithLoadingSupport(
+                with: config,
+                isLoading: isLoading,
+                loadingIsActive: isLoadingTarget
+            ))
+        }
         
         return items
     }
@@ -34,14 +181,14 @@ class MenuItemFactory {
         return item
     }
     
+    // MARK: - Helper Methods
     private static func createSecondaryHeader(title: String) -> NSMenuItem {
         let item = NSMenuItem()
         let headerView = NSView(frame: NSRect(x: 0, y: 0, width: containerWidth, height: 22))
         
-        let titleLabel = NSTextField(labelWithString: title)
-        titleLabel.font = NSFont.systemFont(ofSize: 12, weight: .bold)
+        let titleLabel = createLabel(text: title, font: .systemFont(ofSize: 12, weight: .bold))
         titleLabel.textColor = NSColor.secondaryLabelColor
-        titleLabel.frame = NSRect(x: 12, y: 2, width: 160, height: 16)
+        titleLabel.frame = NSRect(x: sideMargin, y: 2, width: 160, height: 16)
         
         headerView.addSubview(titleLabel)
         item.view = headerView
@@ -49,195 +196,14 @@ class MenuItemFactory {
         return item
     }
     
-    private static func createVolumeHeader() -> NSMenuItem {
-        let item = NSMenuItem()
-        let headerView = NSView(frame: NSRect(x: 0, y: 0, width: containerWidth, height: 28))
-        
-        let titleLabel = NSTextField(labelWithString: "Volume de Milō")
-        titleLabel.font = NSFont.systemFont(ofSize: 13, weight: .semibold)
-        titleLabel.textColor = NSColor.labelColor
-        titleLabel.frame = NSRect(x: 12, y: 4, width: 160, height: 16)
-        
-        
-        headerView.addSubview(titleLabel)
-        item.view = headerView
-        
-        return item
-    }
-    
-    private static func createVolumeSlider(volume: Int, target: AnyObject, action: Selector) -> NSMenuItem {
-        let item = NSMenuItem()
-        
-        // Container avec la largeur complète
-        let containerView = MenuInteractionView(frame: NSRect(x: 0, y: 0, width: containerWidth, height: 31))
-        
-        // Slider avec marges de 14px de chaque côté (même largeur que les séparateurs)
-        let slider = NativeVolumeSlider(frame: NSRect(x: 14, y: 5, width: containerWidth - 28, height: 22))
-        slider.doubleValue = Double(volume)
-        slider.target = target
-        slider.action = action
-        
-        containerView.addSubview(slider)
-        item.view = containerView
-        
-        return item
-    }
-    
-    // MARK: - Audio Sources Section (version originale)
-    static func createAudioSourcesSection(state: MiloState?, target: AnyObject, action: Selector) -> [NSMenuItem] {
-        return createAudioSourcesSectionWithLoading(
-            state: state,
-            loadingStates: [:],
-            loadingTarget: nil,
-            target: target,
-            action: action
-        )
-    }
-    
-    // MARK: - Audio Sources Section (avec support loading)
-    static func createAudioSourcesSectionWithLoading(
-        state: MiloState?,
-        loadingStates: [String: Bool],
-        loadingTarget: String?,  // Quelle source est en cours de loading
-        target: AnyObject,
-        action: Selector
-    ) -> [NSMenuItem] {
-        var items: [NSMenuItem] = []
-        
-        // Titre secondaire "Sortie"
-        let sortieHeader = createSecondaryHeader(title: "Sortie")
-        items.append(sortieHeader)
-        
-        let activeSource = state?.activeSource ?? "none"
-        let audioSources = ["librespot", "bluetooth", "roc"]
-        let hasAudioSourceLoading = loadingTarget != nil && audioSources.contains(loadingTarget!)
-        
-        // Spotify
-        let spotifyIsLoading = loadingStates["librespot"] ?? false
-        let spotifyIsLoadingTarget = loadingTarget == "librespot"
-        // Si une autre source audio est en loading, cette source perd immédiatement sa couleur
-        let hasOtherAudioSourceLoading = hasAudioSourceLoading && !spotifyIsLoadingTarget
-        let spotifyIsActive = spotifyIsLoadingTarget || (!spotifyIsLoading && !hasOtherAudioSourceLoading && activeSource == "librespot")
-        
-        items.append(CircularMenuItem.createWithLoadingSupport(
-            with: MenuItemConfig(
-                title: "Spotify",
-                iconName: "music.note",
-                isActive: spotifyIsActive,
-                target: target,
-                action: action,
-                representedObject: "librespot"
-            ),
-            isLoading: spotifyIsLoading,
-            loadingIsActive: spotifyIsLoadingTarget
-        ))
-        
-        // Bluetooth
-        let bluetoothIsLoading = loadingStates["bluetooth"] ?? false
-        let bluetoothIsLoadingTarget = loadingTarget == "bluetooth"
-        let hasOtherAudioSourceLoadingBT = hasAudioSourceLoading && !bluetoothIsLoadingTarget
-        let bluetoothIsActive = bluetoothIsLoadingTarget || (!bluetoothIsLoading && !hasOtherAudioSourceLoadingBT && activeSource == "bluetooth")
-        
-        items.append(CircularMenuItem.createWithLoadingSupport(
-            with: MenuItemConfig(
-                title: "Bluetooth",
-                iconName: "bluetooth",
-                isActive: bluetoothIsActive,
-                target: target,
-                action: action,
-                representedObject: "bluetooth"
-            ),
-            isLoading: bluetoothIsLoading,
-            loadingIsActive: bluetoothIsLoadingTarget
-        ))
-        
-        // macOS
-        let rocIsLoading = loadingStates["roc"] ?? false
-        let rocIsLoadingTarget = loadingTarget == "roc"
-        let hasOtherAudioSourceLoadingROC = hasAudioSourceLoading && !rocIsLoadingTarget
-        let rocIsActive = rocIsLoadingTarget || (!rocIsLoading && !hasOtherAudioSourceLoadingROC && activeSource == "roc")
-        
-        items.append(CircularMenuItem.createWithLoadingSupport(
-            with: MenuItemConfig(
-                title: "macOS",
-                iconName: "desktopcomputer",
-                isActive: rocIsActive,
-                target: target,
-                action: action,
-                representedObject: "roc"
-            ),
-            isLoading: rocIsLoading,
-            loadingIsActive: rocIsLoadingTarget
-        ))
-        
-        items.append(NSMenuItem.separator())
-        
-        return items
-    }
-    
-    // MARK: - System Controls Section (version originale)
-    static func createSystemControlsSection(state: MiloState?, target: AnyObject, action: Selector) -> [NSMenuItem] {
-        return createSystemControlsSectionWithLoading(
-            state: state,
-            loadingStates: [:],
-            loadingTarget: nil,
-            target: target,
-            action: action
-        )
-    }
-    
-    // MARK: - System Controls Section (avec support loading)
-    static func createSystemControlsSectionWithLoading(
-        state: MiloState?,
-        loadingStates: [String: Bool],
-        loadingTarget: String?,  // Quelle fonctionnalité est en cours de loading
-        target: AnyObject,
-        action: Selector
-    ) -> [NSMenuItem] {
-        var items: [NSMenuItem] = []
-        
-        // Titre secondaire "Fonctionnalités"
-        let featuresHeader = createSecondaryHeader(title: "Fonctionnalités")
-        items.append(featuresHeader)
-        
-        // Multiroom
-        let multiroomIsLoading = loadingStates["multiroom"] ?? false
-        let multiroomIsLoadingTarget = loadingTarget == "multiroom"
-        // CORRECTION : Si c'est la cible du loading → actif, sinon utiliser l'état réel
-        let multiroomIsActive = multiroomIsLoadingTarget || (!multiroomIsLoading && (state?.multiroomEnabled ?? false))
-        
-        items.append(CircularMenuItem.createWithLoadingSupport(
-            with: MenuItemConfig(
-                title: "Multiroom",
-                iconName: "speaker.wave.3",
-                isActive: multiroomIsActive,
-                target: target,
-                action: action,
-                representedObject: "multiroom"
-            ),
-            isLoading: multiroomIsLoading,
-            loadingIsActive: multiroomIsLoadingTarget
-        ))
-        
-        // Égaliseur
-        let equalizerIsLoading = loadingStates["equalizer"] ?? false
-        let equalizerIsLoadingTarget = loadingTarget == "equalizer"
-        let equalizerIsActive = equalizerIsLoadingTarget || (!equalizerIsLoading && (state?.equalizerEnabled ?? false))
-        
-        items.append(CircularMenuItem.createWithLoadingSupport(
-            with: MenuItemConfig(
-                title: "Égaliseur",
-                iconName: "slider.horizontal.3",
-                isActive: equalizerIsActive,
-                target: target,
-                action: action,
-                representedObject: "equalizer"
-            ),
-            isLoading: equalizerIsLoading,
-            loadingIsActive: equalizerIsLoadingTarget
-        ))
-        
-        return items
+    private static func createLabel(text: String, font: NSFont) -> NSTextField {
+        let label = NSTextField(labelWithString: text)
+        label.font = font
+        label.textColor = NSColor.labelColor
+        label.isEditable = false
+        label.isBordered = false
+        label.backgroundColor = NSColor.clear
+        return label
     }
 }
 

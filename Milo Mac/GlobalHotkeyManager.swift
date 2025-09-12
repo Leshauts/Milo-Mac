@@ -2,44 +2,61 @@ import AppKit
 import Foundation
 
 class GlobalHotkeyManager {
+    // MARK: - Dependencies
     private weak var connectionManager: MiloConnectionManager?
     private weak var menuController: MenuBarController?
-    private var isMonitoring = false
     
-    // Instance de VolumeHUD
+    // MARK: - State
+    private var isMonitoring = false
     private var volumeHUD: VolumeHUD?
     
-    // Variables pour le hold-to-repeat
+    // MARK: - Repeat Logic
     private var repeatTimer: Timer?
     private var currentRepeatDirection: String?
     private var currentRepeatDelta: Int = 0
     
-    // Event monitors
+    // MARK: - Event Monitoring
     private var flagsChangedMonitor: Any?
     private var eventTap: CFMachPort?
     
-    // État des touches
+    // MARK: - Key State
     private var isRightOptionPressed = false
     private var isUpArrowPressed = false
     private var isDownArrowPressed = false
     
-    // Configuration du timing
+    // MARK: - Constants
     private let initialRepeatDelay: TimeInterval = 0.5
     private let repeatInterval: TimeInterval = 0.08
-    
-    // Key codes
     private let upArrowKeyCode: UInt16 = 126
     private let downArrowKeyCode: UInt16 = 125
-    
-    // Flags pour Option droite
     private let rightOptionMask: UInt = 0x40
+    private let volumeDeltaKey = "HotkeyVolumeDelta"
+    private let defaultVolumeDelta = 5
     
+    // MARK: - Volume Delta
+    private var volumeDelta: Int {
+        get {
+            let saved = UserDefaults.standard.integer(forKey: volumeDeltaKey)
+            return saved == 0 ? defaultVolumeDelta : saved
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: volumeDeltaKey)
+        }
+    }
+    
+    // MARK: - Initialization
     init(connectionManager: MiloConnectionManager, menuController: MenuBarController) {
         self.connectionManager = connectionManager
         self.menuController = menuController
         self.volumeHUD = VolumeHUD()
     }
     
+    deinit {
+        stopCurrentRepeat()
+        removeEventMonitors()
+    }
+    
+    // MARK: - Public Interface
     func startMonitoring() {
         guard AXIsProcessTrusted() else {
             requestAccessibilityPermissions()
@@ -57,21 +74,45 @@ class GlobalHotkeyManager {
         removeEventMonitors()
     }
     
+    func isCurrentlyMonitoring() -> Bool {
+        return isMonitoring
+    }
+    
+    func hasAccessibilityPermissions() -> Bool {
+        return AXIsProcessTrusted()
+    }
+    
+    func recheckPermissions() {
+        if AXIsProcessTrusted() {
+            if !isMonitoring {
+                isMonitoring = true
+            }
+            setupEventMonitoring()
+            setupEventTap()
+        }
+    }
+    
+    func getVolumeDelta() -> Int {
+        return volumeDelta
+    }
+    
+    func setVolumeDelta(_ delta: Int) {
+        volumeDelta = max(1, min(10, delta))
+    }
+    
+    // MARK: - Event Monitor Setup
     private func setupEventMonitoring() {
-        // Nettoyer l'ancien monitor s'il existe
         if let monitor = flagsChangedMonitor {
             NSEvent.removeMonitor(monitor)
             flagsChangedMonitor = nil
         }
         
-        // Créer le nouveau monitor
         flagsChangedMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.flagsChanged]) { [weak self] event in
             self?.handleFlagsChanged(event)
         }
     }
     
     private func setupEventTap() {
-        // Nettoyer l'ancien event tap s'il existe
         cleanupEventTap()
         
         guard AXIsProcessTrusted() else {
@@ -105,6 +146,23 @@ class GlobalHotkeyManager {
         CGEvent.tapEnable(tap: eventTap, enable: true)
     }
     
+    private func cleanupEventTap() {
+        if let eventTap = eventTap {
+            CGEvent.tapEnable(tap: eventTap, enable: false)
+            CFMachPortInvalidate(eventTap)
+            self.eventTap = nil
+        }
+    }
+    
+    private func removeEventMonitors() {
+        if let monitor = flagsChangedMonitor {
+            NSEvent.removeMonitor(monitor)
+            flagsChangedMonitor = nil
+        }
+        cleanupEventTap()
+    }
+    
+    // MARK: - Event Handling
     private func handleCGEvent(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
         guard isMonitoring else {
             return Unmanaged.passUnretained(event)
@@ -119,9 +177,8 @@ class GlobalHotkeyManager {
                 handleArrowKeyUp(keyCode: keyCode)
             }
             
-            // Si Option droite est enfoncé, intercepter l'événement
             if isRightOptionPressed {
-                return nil
+                return nil // Intercept event
             }
         }
         
@@ -132,11 +189,11 @@ class GlobalHotkeyManager {
         switch keyCode {
         case upArrowKeyCode:
             isUpArrowPressed = true
-            checkForVolumeAction(direction: "up", delta: 5)
+            checkForVolumeAction(direction: "up", delta: volumeDelta)
             
         case downArrowKeyCode:
             isDownArrowPressed = true
-            checkForVolumeAction(direction: "down", delta: -5)
+            checkForVolumeAction(direction: "down", delta: -volumeDelta)
             
         default:
             break
@@ -174,10 +231,11 @@ class GlobalHotkeyManager {
         }
     }
     
+    // MARK: - Volume Actions
     private func checkForVolumeAction(direction: String, delta: Int) {
         guard isRightOptionPressed else { return }
         
-        if let menuController = menuController, menuController.isMenuCurrentlyOpen() {
+        if menuController?.isMenuCurrentlyOpen() == true {
             NSSound.beep()
             return
         }
@@ -195,13 +253,16 @@ class GlobalHotkeyManager {
         
         if currentRepeatDirection != direction {
             executeVolumeChange(delta: delta, direction: direction)
-            
-            currentRepeatDirection = direction
-            currentRepeatDelta = delta
-            
-            repeatTimer = Timer.scheduledTimer(withTimeInterval: initialRepeatDelay, repeats: false) { [weak self] _ in
-                self?.startContinuousRepeat()
-            }
+            startRepeatSequence(direction: direction, delta: delta)
+        }
+    }
+    
+    private func startRepeatSequence(direction: String, delta: Int) {
+        currentRepeatDirection = direction
+        currentRepeatDelta = delta
+        
+        repeatTimer = Timer.scheduledTimer(withTimeInterval: initialRepeatDelay, repeats: false) { [weak self] _ in
+            self?.startContinuousRepeat()
         }
     }
     
@@ -255,6 +316,7 @@ class GlobalHotkeyManager {
         }
     }
     
+    // MARK: - UI Updates
     @MainActor
     private func updateVolumeHUDAfterChange() async {
         guard let apiService = connectionManager?.getAPIService(),
@@ -264,7 +326,7 @@ class GlobalHotkeyManager {
             let volumeStatus = try await apiService.getVolumeStatus()
             volumeHUD.show(volume: volumeStatus.volume)
         } catch {
-            NSLog("Erreur lors de la récupération du volume pour la HUD: \(error)")
+            NSLog("Error updating volume HUD: \(error)")
         }
     }
     
@@ -283,23 +345,7 @@ class GlobalHotkeyManager {
         }
     }
     
-    private func cleanupEventTap() {
-        if let eventTap = eventTap {
-            CGEvent.tapEnable(tap: eventTap, enable: false)
-            CFMachPortInvalidate(eventTap)
-            self.eventTap = nil
-        }
-    }
-    
-    private func removeEventMonitors() {
-        if let monitor = flagsChangedMonitor {
-            NSEvent.removeMonitor(monitor)
-            flagsChangedMonitor = nil
-        }
-        
-        cleanupEventTap()
-    }
-    
+    // MARK: - Permissions
     private func requestAccessibilityPermissions() {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
@@ -325,28 +371,5 @@ class GlobalHotkeyManager {
                 self?.setupEventTap()
             }
         }
-    }
-    
-    func isCurrentlyMonitoring() -> Bool {
-        return isMonitoring
-    }
-    
-    func hasAccessibilityPermissions() -> Bool {
-        return AXIsProcessTrusted()
-    }
-    
-    func recheckPermissions() {
-        if AXIsProcessTrusted() {
-            if !isMonitoring {
-                isMonitoring = true
-            }
-            setupEventMonitoring()
-            setupEventTap()
-        }
-    }
-    
-    deinit {
-        stopCurrentRepeat()
-        removeEventMonitors()
     }
 }

@@ -15,10 +15,6 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
     private var currentVolume: VolumeStatus?
     private var isMenuOpen = false
     
-    // MARK: - UI State
-    private var activeMenu: NSMenu?
-    private var isPreferencesMenuActive = false
-    
     // MARK: - Loading State
     private var loadingStates: [String: Bool] = [:]
     private var loadingTimers: [String: Timer] = [:]
@@ -85,25 +81,54 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
         statusItem.menu = nil
         
         guard let event = NSApp.currentEvent else {
-            showMainMenu()
+            Task { await showMainMenu() }
             return
         }
         
         if event.modifierFlags.contains(.option) {
-            showPreferencesMenu()
+            Task { await showPreferencesMenu() }
         } else {
-            showMainMenu()
+            Task { await showMainMenu() }
         }
     }
     
-    private func showMainMenu() {
-        let menu = createMenu(isPreferences: false)
-        displayMenu(menu)
+    private func showMainMenu() async {
+        await showMenu(isPreferences: false)
     }
     
-    private func showPreferencesMenu() {
-        let menu = createMenu(isPreferences: true)
-        displayMenu(menu)
+    private func showPreferencesMenu() async {
+        await showMenu(isPreferences: true)
+    }
+    
+    private func showMenu(isPreferences: Bool) async {
+        // Rafraîchir les données rapidement si connecté (avec timeout court)
+        if isMiloConnected {
+            await refreshMenuDataWithTimeout()
+        }
+        
+        // Construire et afficher le menu final sur le main thread
+        await MainActor.run {
+            let menu = self.createMenu(isPreferences: isPreferences)
+            self.displayMenu(menu)
+        }
+    }
+    
+    private func refreshMenuDataWithTimeout() async {
+        // Utiliser TaskGroup pour limiter le temps de refresh à 1 seconde max
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask {
+                await self.refreshMenuData()
+            }
+            
+            // Timeout de 1 seconde
+            group.addTask {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+            }
+            
+            // Prendre le premier qui termine (soit le refresh, soit le timeout)
+            await group.next()
+            group.cancelAll()
+        }
     }
     
     private func createMenu(isPreferences: Bool) -> NSMenu {
@@ -118,8 +143,6 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
             buildDisconnectedMenu(menu, isPreferences: isPreferences)
         }
         
-        activeMenu = menu
-        isPreferencesMenuActive = isPreferences
         volumeController.activeMenu = menu
         
         return menu
@@ -128,29 +151,24 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
     private func displayMenu(_ menu: NSMenu) {
         NSApp.activate(ignoringOtherApps: true)
         statusItem.menu = menu
-        
         statusItem.button?.performClick(nil)
         
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
             self?.statusItem.menu = nil
-            self?.monitorMenuClosure()
-        }
-        
-        if isMiloConnected {
-            refreshMenuData()
+            self?.monitorMenuClosure(menu)
         }
     }
     
-    private func monitorMenuClosure() {
-        if let menu = activeMenu, menu.highlightedItem == nil {
+    private func monitorMenuClosure(_ menu: NSMenu) {
+        if menu.highlightedItem == nil {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
-                if self?.activeMenu?.highlightedItem == nil {
+                if menu.highlightedItem == nil {
                     self?.handleMenuClosed()
                 }
             }
         } else {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
-                self?.monitorMenuClosure()
+                self?.monitorMenuClosure(menu)
             }
         }
     }
@@ -158,8 +176,6 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
     private func handleMenuClosed() {
         isMenuOpen = false
         volumeController.cleanup()
-        activeMenu = nil
-        isPreferencesMenuActive = false
         volumeController.activeMenu = nil
     }
     
@@ -331,8 +347,6 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
             hotkeyManager.stopMonitoring()
         } else {
             hotkeyManager.startMonitoring()
-            schedulePermissionRechecks()
-            scheduleUIUpdate()
         }
     }
     
@@ -340,14 +354,12 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
         guard let hotkeyManager = hotkeyManager else { return }
         let newDelta = max(1, hotkeyManager.getVolumeDelta() - 1)
         hotkeyManager.setVolumeDelta(newDelta)
-        updateVolumeDeltaInterface()
     }
     
     @objc private func increaseVolumeDelta() {
         guard let hotkeyManager = hotkeyManager else { return }
         let newDelta = min(10, hotkeyManager.getVolumeDelta() + 1)
         hotkeyManager.setVolumeDelta(newDelta)
-        updateVolumeDeltaInterface()
     }
     
     @objc private func toggleLaunchAtLogin() {
@@ -368,7 +380,7 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
         
         loadingTarget = identifier
         loadingStartTimes[identifier] = Date()
-        setLoadingState(for: identifier, isLoading: true)
+        loadingStates[identifier] = true
         
         loadingTimers[identifier]?.invalidate()
         loadingTimers[identifier] = Timer.scheduledTimer(withTimeInterval: timeout, repeats: false) { _ in
@@ -377,27 +389,13 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
     }
     
     private func stopLoading(for identifier: String) {
-        setLoadingState(for: identifier, isLoading: false)
+        loadingStates[identifier] = false
         loadingTimers[identifier]?.invalidate()
         loadingTimers[identifier] = nil
         loadingStartTimes[identifier] = nil
         
         if loadingTarget == identifier {
             loadingTarget = nil
-        }
-        
-        if let menu = activeMenu {
-            updateMenuInRealTime(menu)
-        }
-    }
-    
-    private func setLoadingState(for identifier: String, isLoading: Bool) {
-        guard loadingStates[identifier] != isLoading else { return }
-        
-        loadingStates[identifier] = isLoading
-        
-        if let menu = activeMenu {
-            updateMenuInRealTime(menu)
         }
     }
     
@@ -407,55 +405,6 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
         case "multiroom": return currentState?.multiroomEnabled ?? false
         case "equalizer": return currentState?.equalizerEnabled ?? false
         default: return false
-        }
-    }
-    
-    private func schedulePermissionRechecks() {
-        guard let hotkeyManager = hotkeyManager else { return }
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            hotkeyManager.recheckPermissions()
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
-            hotkeyManager.recheckPermissions()
-        }
-    }
-    
-    private func scheduleUIUpdate() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
-            if let menu = self?.activeMenu {
-                self?.updateMenuInRealTime(menu)
-            }
-        }
-    }
-    
-    private func updateVolumeDeltaInterface() {
-        guard let menu = activeMenu, isPreferencesMenuActive else { return }
-        
-        for item in menu.items {
-            if let components = item.representedObject as? [String: NSView],
-               let decreaseButton = components["decrease"] as? NSButton,
-               let increaseButton = components["increase"] as? NSButton,
-               let valueLabel = components["value"] as? NSTextField,
-               let hotkeyManager = hotkeyManager {
-                
-                let currentDelta = hotkeyManager.getVolumeDelta()
-                valueLabel.stringValue = "\(currentDelta)"
-                decreaseButton.isEnabled = currentDelta > 1
-                increaseButton.isEnabled = currentDelta < 10
-                break
-            }
-        }
-    }
-    
-    private func updateMenuInRealTime(_ menu: NSMenu) {
-        CircularMenuItem.cleanupAllSpinners()
-        menu.removeAllItems()
-        
-        if isMiloConnected {
-            buildConnectedMenu(menu, isPreferences: isPreferencesMenuActive)
-        } else {
-            buildDisconnectedMenu(menu, isPreferences: isPreferencesMenuActive)
         }
     }
     
@@ -469,7 +418,7 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
         if #available(macOS 13.0, *) {
             return SMAppService.mainApp.status == .enabled
         } else {
-            return false // Legacy method would be implemented here
+            return false
         }
     }
     
@@ -494,17 +443,9 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
     }
     
     // MARK: - Data Refresh
-    private func refreshMenuData() {
-        Task {
-            await refreshState()
-            await refreshVolumeStatus()
-            
-            await MainActor.run {
-                if let menu = self.activeMenu {
-                    self.updateMenuInRealTime(menu)
-                }
-            }
-        }
+    private func refreshMenuData() async {
+        await refreshState()
+        await refreshVolumeStatus()
     }
     
     private func refreshState() async {
@@ -557,7 +498,6 @@ extension MenuBarController {
         }
         
         hotkeyManager?.startMonitoring()
-        refreshMenuData()
     }
     
     func miloDidDisconnect() {
@@ -568,10 +508,6 @@ extension MenuBarController {
         
         clearState()
         volumeController.cleanup()
-        
-        if let menu = activeMenu {
-            updateMenuInRealTime(menu)
-        }
     }
     
     func didReceiveStateUpdate(_ state: MiloState) {
@@ -611,11 +547,6 @@ extension MenuBarController {
             if isLoading && systemToggles.contains(toggleId) {
                 handleTimedLoadingCompletion(for: toggleId)
             }
-        }
-        
-        let hasActiveLoading = loadingStates.values.contains(true)
-        if let menu = activeMenu, !hasActiveLoading {
-            updateMenuInRealTime(menu)
         }
     }
     

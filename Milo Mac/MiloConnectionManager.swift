@@ -260,10 +260,14 @@ class MiloConnectionManager: NSObject {
     private func handleSystemStateChange(_ data: [String: Any]) {
         guard let fullState = data["full_state"] as? [String: Any] else { return }
         
+        // CORRECTION : Ajout du paramètre targetSource manquant
+        let targetSource = fullState["target_source"] as? String
+        
         let state = MiloState(
             activeSource: fullState["active_source"] as? String ?? "none",
             pluginState: fullState["plugin_state"] as? String ?? "inactive",
             isTransitioning: fullState["transitioning"] as? Bool ?? false,
+            targetSource: targetSource, // AJOUTÉ
             multiroomEnabled: fullState["multiroom_enabled"] as? Bool ?? false,
             equalizerEnabled: fullState["equalizer_enabled"] as? Bool ?? false,
             metadata: fullState["metadata"] as? [String: Any] ?? [:]

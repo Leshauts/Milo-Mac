@@ -3,7 +3,8 @@ import Foundation
 struct MiloState {
     let activeSource: String
     let pluginState: String
-    let isTransitioning: Bool
+    let isTransitioning: Bool     // GARDÉ pour compatibilité backend, mais NON UTILISÉ côté Mac
+    let targetSource: String?     // SEUL INDICATEUR utilisé pour les spinners
     let multiroomEnabled: Bool
     let equalizerEnabled: Bool
     let metadata: [String: Any]
@@ -22,11 +23,10 @@ class MiloAPIService {
     init(host: String, port: Int = 80) {
         self.baseURL = "http://\(host):\(port)"
         
-        // CORRECTION : Configuration avec timeouts plus courts pour éviter les blocages
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 3.0      // 3s au lieu de défaut (60s)
-        config.timeoutIntervalForResource = 5.0     // 5s au lieu de défaut (très long)
-        config.waitsForConnectivity = false         // Ne pas attendre la connectivité
+        config.timeoutIntervalForRequest = 3.0
+        config.timeoutIntervalForResource = 5.0
+        config.waitsForConnectivity = false
         self.session = URLSession(configuration: config)
     }
     
@@ -46,10 +46,14 @@ class MiloAPIService {
             throw APIError.invalidResponse
         }
         
+        // NETTOYÉ : targetSource est maintenant LE seul indicateur de transition
+        let targetSource = json["target_source"] as? String
+        
         return MiloState(
             activeSource: json["active_source"] as? String ?? "none",
             pluginState: json["plugin_state"] as? String ?? "inactive",
-            isTransitioning: json["transitioning"] as? Bool ?? false,
+            isTransitioning: json["transitioning"] as? Bool ?? false, // IGNORÉ côté Mac
+            targetSource: targetSource, // SEUL INDICATEUR utilisé
             multiroomEnabled: json["multiroom_enabled"] as? Bool ?? false,
             equalizerEnabled: json["equalizer_enabled"] as? Bool ?? false,
             metadata: json["metadata"] as? [String: Any] ?? [:]

@@ -97,15 +97,14 @@ class MenuItemFactory {
         return button
     }
     
-    // MARK: - Audio Sources Section
-    static func createAudioSourcesSection(state: MiloState?, loadingStates: [String: Bool] = [:], loadingTarget: String? = nil, target: AnyObject, action: Selector) -> [NSMenuItem] {
+    // MARK: - NETTOYÉ : Audio Sources Section (target_source uniquement)
+    static func createAudioSourcesSection(state: MiloState?, loadingStates: [String: Bool] = [:], target: AnyObject, action: Selector) -> [NSMenuItem] {
         var items: [NSMenuItem] = []
         
         items.append(createSecondaryHeader(title: "Sortie"))
         
         let activeSource = state?.activeSource ?? "none"
-        let audioSources = ["librespot", "bluetooth", "roc"]
-        let hasAudioSourceLoading = loadingTarget != nil && audioSources.contains(loadingTarget!)
+        let targetSource = state?.targetSource // SIMPLIFIÉ : Seul indicateur
         
         let sourceConfigs = [
             ("Spotify", "music.note", "librespot"),
@@ -114,10 +113,20 @@ class MenuItemFactory {
         ]
         
         for (title, iconName, sourceId) in sourceConfigs {
-            let isLoading = loadingStates[sourceId] ?? false
-            let isLoadingTarget = loadingTarget == sourceId
-            let hasOtherAudioSourceLoading = hasAudioSourceLoading && !isLoadingTarget
-            let isActive = isLoadingTarget || (!isLoading && !hasOtherAudioSourceLoading && activeSource == sourceId)
+            // LOGIQUE CORRIGÉE : Pendant transition, seul target_source est actif visuellement
+            // - Si targetSource existe → seule cette source est active (bleue)
+            // - Si targetSource == null → activeSource est active (bleue)
+            
+            let isLoading = (targetSource == sourceId)
+            let isActive: Bool
+            
+            if let targetSource = targetSource {
+                // Pendant transition : seule la destination est active visuellement
+                isActive = (sourceId == targetSource)
+            } else {
+                // Aucune transition : source normale active
+                isActive = (activeSource == sourceId)
+            }
             
             let config = MenuItemConfig(
                 title: title,
@@ -131,7 +140,7 @@ class MenuItemFactory {
             items.append(CircularMenuItem.createWithLoadingSupport(
                 with: config,
                 isLoading: isLoading,
-                loadingIsActive: isLoadingTarget
+                loadingIsActive: isLoading // Si en loading, toujours actif visuellement
             ))
         }
         
@@ -139,11 +148,13 @@ class MenuItemFactory {
         return items
     }
     
-    // MARK: - System Controls Section
-    static func createSystemControlsSection(state: MiloState?, loadingStates: [String: Bool] = [:], loadingTarget: String? = nil, target: AnyObject, action: Selector) -> [NSMenuItem] {
+    // MARK: - NETTOYÉ : System Controls Section (target_source uniquement)
+    static func createSystemControlsSection(state: MiloState?, loadingStates: [String: Bool] = [:], target: AnyObject, action: Selector) -> [NSMenuItem] {
         var items: [NSMenuItem] = []
         
         items.append(createSecondaryHeader(title: "Fonctionnalités"))
+        
+        let targetSource = state?.targetSource // SIMPLIFIÉ : Seul indicateur
         
         let systemConfigs = [
             ("Multiroom", "speaker.wave.3", "multiroom", state?.multiroomEnabled ?? false),
@@ -151,9 +162,12 @@ class MenuItemFactory {
         ]
         
         for (title, iconName, toggleId, currentlyEnabled) in systemConfigs {
-            let isLoading = loadingStates[toggleId] ?? false
-            let isLoadingTarget = loadingTarget == toggleId
-            let isActive = isLoadingTarget || (!isLoading && currentlyEnabled)
+            // LOGIQUE ULTRA-SIMPLE :
+            // - Si targetSource == toggleId → isLoading = true
+            // - Si targetSource == nil → état normal selon currentlyEnabled
+            
+            let isLoading = (targetSource == toggleId)
+            let isActive = isLoading || (!isLoading && currentlyEnabled)
             
             let config = MenuItemConfig(
                 title: title,
@@ -167,7 +181,7 @@ class MenuItemFactory {
             items.append(CircularMenuItem.createWithLoadingSupport(
                 with: config,
                 isLoading: isLoading,
-                loadingIsActive: isLoadingTarget
+                loadingIsActive: isLoading // Si en loading, toujours actif visuellement
             ))
         }
         

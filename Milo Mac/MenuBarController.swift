@@ -19,11 +19,11 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
     private var activeMenu: NSMenu?
     private var isPreferencesMenuActive = false
     
-    // MARK: - Loading State
+    // MARK: - Loading State - AVEC PROTECTION CONTRE SYNC WEBSOCKET
     private var loadingStates: [String: Bool] = [:]
     private var loadingTimers: [String: Timer] = [:]
     private var loadingStartTimes: [String: Date] = [:]
-    private var loadingTarget: String?
+    private var manualLoadingProtection: [String: Date] = [:] // AJOUTÉ
     
     // MARK: - Background Refresh
     private var backgroundRefreshTimer: Timer?
@@ -220,22 +220,22 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
         }
     }
     
+    // MARK: - NETTOYÉ : Section Audio Sources (target_source uniquement)
     private func addAudioSourcesSection(to menu: NSMenu) {
         let sourceItems = MenuItemFactory.createAudioSourcesSection(
             state: currentState,
             loadingStates: loadingStates,
-            loadingTarget: loadingTarget,
             target: self,
             action: #selector(sourceClicked)
         )
         sourceItems.forEach { menu.addItem($0) }
     }
     
+    // MARK: - NETTOYÉ : Section System Controls (target_source uniquement)
     private func addSystemControlsSection(to menu: NSMenu) {
         let systemItems = MenuItemFactory.createSystemControlsSection(
             state: currentState,
             loadingStates: loadingStates,
-            loadingTarget: loadingTarget,
             target: self,
             action: #selector(toggleClicked)
         )
@@ -308,13 +308,22 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
         let activeSource = currentState?.activeSource ?? "none"
         guard activeSource != sourceId else { return }
         
-        startLoading(for: sourceId, timeout: loadingTimeoutDuration)
+        // CORRIGÉ : Ne démarrer le loading qu'après succès HTTP
+        NSLog("🚀 Attempting to change source to: \(sourceId)")
         
         Task {
             do {
+                // D'abord faire la requête HTTP
                 try await apiService.changeSource(sourceId)
+                NSLog("✅ HTTP request successful for: \(sourceId)")
+                
+                // SEULEMENT maintenant démarrer le loading visuel
+                await MainActor.run {
+                    self.startLoading(for: sourceId, timeout: self.loadingTimeoutDuration)
+                }
             } catch {
-                await MainActor.run { self.stopLoading(for: sourceId) }
+                NSLog("❌ HTTP request failed for \(sourceId): \(error)")
+                // Pas de loading si la requête a échoué
             }
         }
     }
@@ -326,20 +335,29 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
         let currentlyEnabled = getCurrentToggleState(toggleType)
         let newState = !currentlyEnabled
         
-        startLoading(for: toggleType, timeout: 10.0)
+        NSLog("🚀 Attempting to toggle \(toggleType) to: \(newState)")
         
         Task {
             do {
+                // D'abord faire la requête HTTP
                 switch toggleType {
                 case "multiroom":
                     try await apiService.setMultiroom(newState)
                 case "equalizer":
                     try await apiService.setEqualizer(newState)
                 default:
-                    break
+                    return
+                }
+                
+                NSLog("✅ HTTP request successful for \(toggleType): \(newState)")
+                
+                // SEULEMENT maintenant démarrer le loading visuel
+                await MainActor.run {
+                    self.startLoading(for: toggleType, timeout: 10.0)
                 }
             } catch {
-                await MainActor.run { self.stopLoading(for: toggleType) }
+                NSLog("❌ HTTP request failed for \(toggleType): \(error)")
+                // Pas de loading si la requête a échoué
             }
         }
     }
@@ -382,29 +400,29 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
         NSApplication.shared.terminate(nil)
     }
     
-    // MARK: - Loading State Management
+    // MARK: - Loading State Management - AVEC PROTECTION
     private func startLoading(for identifier: String, timeout: TimeInterval) {
         guard loadingStates[identifier] != true else { return }
         
-        loadingTarget = identifier
+        NSLog("🎬 Starting loading for: \(identifier)")
         loadingStartTimes[identifier] = Date()
+        manualLoadingProtection[identifier] = Date() // AJOUTÉ : Protection 2s
         setLoadingState(for: identifier, isLoading: true)
         
         loadingTimers[identifier]?.invalidate()
         loadingTimers[identifier] = Timer.scheduledTimer(withTimeInterval: timeout, repeats: false) { _ in
+            NSLog("⏱️ Loading timeout reached for: \(identifier)")
             Task { @MainActor in self.stopLoading(for: identifier) }
         }
     }
     
     private func stopLoading(for identifier: String) {
+        NSLog("🛑 Stopping loading for: \(identifier)")
         setLoadingState(for: identifier, isLoading: false)
         loadingTimers[identifier]?.invalidate()
         loadingTimers[identifier] = nil
         loadingStartTimes[identifier] = nil
-        
-        if loadingTarget == identifier {
-            loadingTarget = nil
-        }
+        manualLoadingProtection[identifier] = nil // AJOUTÉ : Nettoyer protection
         
         if let menu = activeMenu {
             updateMenuInRealTime(menu)
@@ -415,9 +433,57 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
         guard loadingStates[identifier] != isLoading else { return }
         
         loadingStates[identifier] = isLoading
+        NSLog("🔄 Loading state changed: \(identifier) = \(isLoading)")
         
         if let menu = activeMenu {
             updateMenuInRealTime(menu)
+        }
+    }
+    
+    // MARK: - CORRIGÉ : Synchronisation avec protection contre conflicts WebSocket
+    private func syncLoadingStatesWithBackend() {
+        guard let state = currentState else { return }
+        
+        NSLog("🔍 Syncing loading states - target_source: \(state.targetSource ?? "null")")
+        
+        let audioSources = ["librespot", "bluetooth", "roc"]
+        let systemToggles = ["multiroom", "equalizer"]
+        let allIdentifiers = audioSources + systemToggles
+        
+        // LOGIQUE AVEC PROTECTION : Respecter le délai de grâce après action manuelle
+        if let targetSource = state.targetSource, !targetSource.isEmpty {
+            for identifier in allIdentifiers {
+                if identifier == targetSource {
+                    // Cette source doit être en loading
+                    if loadingStates[identifier] != true {
+                        NSLog("🎬 Backend indicates \(identifier) should be loading")
+                        setLoadingState(for: identifier, isLoading: true)
+                    }
+                } else {
+                    // Les autres sources ne doivent pas être en loading (sans protection car différentes)
+                    if loadingStates[identifier] == true {
+                        NSLog("🛑 Backend indicates \(identifier) should not be loading")
+                        stopLoading(for: identifier)
+                    }
+                }
+            }
+        } else {
+            // target_source est null, aucune source ne doit être en loading
+            for identifier in allIdentifiers {
+                if loadingStates[identifier] == true {
+                    // PROTECTION : Vérifier si ce loading a été démarré manuellement récemment
+                    if let protectionTime = manualLoadingProtection[identifier] {
+                        let elapsed = Date().timeIntervalSince(protectionTime)
+                        if elapsed < 2.0 {
+                            NSLog("🛡️ Protecting manual loading for \(identifier) (\(String(format: "%.1f", elapsed))s ago)")
+                            continue // Ignorer cette synchronisation
+                        }
+                    }
+                    
+                    NSLog("🛑 Backend target_source is null, stopping loading for \(identifier)")
+                    stopLoading(for: identifier)
+                }
+            }
         }
     }
     
@@ -598,7 +664,8 @@ extension MenuBarController {
     
     func didReceiveStateUpdate(_ state: MiloState) {
         currentState = state
-        handleLoadingCompletion(for: state)
+        // SIMPLIFIÉ : Seule synchronisation basée sur target_source
+        syncLoadingStatesWithBackend()
     }
     
     func didReceiveVolumeUpdate(_ volume: VolumeStatus) {
@@ -614,44 +681,6 @@ extension MenuBarController {
         
         // Clear all loading states
         loadingStates.keys.forEach { stopLoading(for: $0) }
-        loadingTarget = nil
-    }
-    
-    private func handleLoadingCompletion(for state: MiloState) {
-        // Handle audio source loading completion
-        if !state.isTransitioning {
-            for (sourceId, isLoading) in loadingStates {
-                if isLoading && state.activeSource == sourceId {
-                    handleTimedLoadingCompletion(for: sourceId)
-                }
-            }
-        }
-        
-        // Handle system toggle loading completion
-        let systemToggles = ["multiroom", "equalizer"]
-        for (toggleId, isLoading) in loadingStates {
-            if isLoading && systemToggles.contains(toggleId) {
-                handleTimedLoadingCompletion(for: toggleId)
-            }
-        }
-        
-        let hasActiveLoading = loadingStates.values.contains(true)
-        if let menu = activeMenu, !hasActiveLoading {
-            updateMenuInRealTime(menu)
-        }
-    }
-    
-    private func handleTimedLoadingCompletion(for identifier: String) {
-        let startTime = loadingStartTimes[identifier] ?? Date()
-        let elapsed = Date().timeIntervalSince(startTime)
-        
-        if elapsed >= minimumLoadingDuration {
-            stopLoading(for: identifier)
-        } else {
-            let remainingTime = minimumLoadingDuration - elapsed
-            DispatchQueue.main.asyncAfter(deadline: .now() + remainingTime) { [weak self] in
-                self?.stopLoading(for: identifier)
-            }
-        }
+        manualLoadingProtection.removeAll() // AJOUTÉ : Nettoyer protections
     }
 }

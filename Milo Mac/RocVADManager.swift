@@ -94,6 +94,23 @@ class RocVADManager {
         }
     }
     
+    func waitForDriverInitialization(completion: @escaping (Bool) -> Void) {
+        NSLog("⏳ Starting driver initialization wait...")
+        
+        // Créer fenêtre de progression pour l'attente
+        createWaitingWindow()
+        
+        // Démarrer les tentatives en background
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let success = self?.performDriverWaitRetries() ?? false
+            
+            DispatchQueue.main.async {
+                self?.hideWaitingWindow()
+                completion(success)
+            }
+        }
+    }
+    
     // MARK: - Installation Process
     
     private func installRocVAD() -> Bool {
@@ -186,7 +203,99 @@ class RocVADManager {
         progressBar = nil
     }
     
-    // MARK: - Device Configuration
+    
+    // MARK: - Driver Initialization Wait
+    
+    private var waitingWindow: NSWindow?
+    private var waitingStatusLabel: NSTextField?
+    private var waitingProgressBar: NSProgressIndicator?
+    
+    private func performDriverWaitRetries() -> Bool {
+        let retryDelays = [2.0, 5.0, 8.0, 12.0, 15.0] // Total ~42 secondes
+        var attemptCount = 0
+        
+        for delay in retryDelays {
+            attemptCount += 1
+            
+            updateWaitingStatus("Attente d'initialisation du driver... (tentative \(attemptCount)/\(retryDelays.count))")
+            NSLog("🔄 Driver wait attempt \(attemptCount)/\(retryDelays.count)")
+            
+            // Attendre avant de tester
+            Thread.sleep(forTimeInterval: delay)
+            
+            // Tester si le driver est maintenant fonctionnel
+            let task = Process()
+            task.launchPath = "/usr/local/bin/roc-vad"
+            task.arguments = ["info"]
+            task.standardOutput = Pipe()
+            task.standardError = Pipe()
+            
+            task.launch()
+            task.waitUntilExit()
+            
+            if task.terminationStatus == 0 {
+                NSLog("✅ Driver became available after \(attemptCount) attempts")
+                updateWaitingStatus("Driver initialisé avec succès !")
+                Thread.sleep(forTimeInterval: 1.0)
+                return true
+            }
+        }
+        
+        NSLog("❌ Driver still not available after \(attemptCount) attempts")
+        return false
+    }
+    
+    private func createWaitingWindow() {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 400, height: 120),
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: false
+        )
+        
+        window.title = "Initialisation Milō"
+        window.center()
+        window.level = .floating
+        window.isReleasedWhenClosed = false
+        
+        let contentView = NSView(frame: window.contentView!.bounds)
+        
+        // Label de statut
+        let label = NSTextField(labelWithString: "Attente d'initialisation du driver audio...")
+        label.alignment = .center
+        label.font = .systemFont(ofSize: 13)
+        label.frame = NSRect(x: 20, y: 70, width: 360, height: 20)
+        contentView.addSubview(label)
+        waitingStatusLabel = label
+        
+        // Barre de progression
+        let progress = NSProgressIndicator()
+        progress.style = .bar
+        progress.isIndeterminate = true
+        progress.frame = NSRect(x: 50, y: 30, width: 300, height: 20)
+        progress.startAnimation(nil)
+        contentView.addSubview(progress)
+        waitingProgressBar = progress
+        
+        window.contentView = contentView
+        window.makeKeyAndOrderFront(nil)
+        
+        waitingWindow = window
+    }
+    
+    private func updateWaitingStatus(_ message: String) {
+        DispatchQueue.main.async { [weak self] in
+            self?.waitingStatusLabel?.stringValue = message
+        }
+    }
+    
+    private func hideWaitingWindow() {
+        waitingProgressBar?.stopAnimation(nil)
+        waitingWindow?.close()
+        waitingWindow = nil
+        waitingStatusLabel = nil
+        waitingProgressBar = nil
+    }
     
     private func ensureDeviceConfigured() -> Bool {
         let deviceInfo = getRocVADDeviceInfo()

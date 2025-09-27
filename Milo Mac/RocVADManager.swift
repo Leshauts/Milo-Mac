@@ -116,7 +116,7 @@ class RocVADManager {
     private func installRocVAD() -> Bool {
         NSLog("📦 Installing roc-vad...")
         
-        updateProgressStatus("Téléchargement et installation de roc-vad...")
+        updateProgressStatus("Téléchargement et installation des dépendances (roc-vad) ...")
         
         let script = """
         do shell script "sudo /bin/bash -c \\"$(curl -fsSL https://raw.githubusercontent.com/roc-streaming/roc-vad/HEAD/install.sh)\\"" with administrator privileges
@@ -139,7 +139,7 @@ class RocVADManager {
         let success = FileManager.default.fileExists(atPath: rocVADPath)
         
         if success {
-            updateProgressStatus("Installation terminée !")
+            updateProgressStatus("Première partie de l’installation terminée")
             Thread.sleep(forTimeInterval: 1.0)
             NSLog("✅ roc-vad installation completed successfully")
         } else {
@@ -159,7 +159,7 @@ class RocVADManager {
             defer: false
         )
         
-        window.title = "Installation Milō"
+        window.title = "Installation de Milō pour Mac"
         window.center()
         window.level = .floating
         window.isReleasedWhenClosed = false
@@ -253,7 +253,7 @@ class RocVADManager {
             defer: false
         )
         
-        window.title = "Initialisation Milō"
+        window.title = "Initialisation de Milō pour Mac "
         window.center()
         window.level = .floating
         window.isReleasedWhenClosed = false

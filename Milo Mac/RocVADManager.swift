@@ -78,17 +78,65 @@ class RocVADManager {
     }
     
     func configureDeviceOnly(completion: @escaping (Bool) -> Void) {
-        NSLog("🔧 Configuring Milō audio device only...")
+        NSLog("🔧 Checking Milō audio device configuration...")
         
-        // Créer panel de progression
-        showProgressPanel(message: "Configuration du dispositif audio Milō...")
-        
+        // Première vérification silencieuse en background
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            let success = self?.ensureDeviceConfigured() ?? false
+            guard let self = self else {
+                DispatchQueue.main.async { completion(false) }
+                return
+            }
             
-            DispatchQueue.main.async {
-                self?.hideProgressPanel()
-                completion(success)
+            // Vérification rapide et silencieuse
+            let deviceInfo = self.getRocVADDeviceInfo()
+            
+            if let existingDevice = deviceInfo.first(where: { $0.name == self.deviceName }) {
+                NSLog("✅ Found existing Milō device (index: \(existingDevice.index))")
+                
+                let isConfigured = self.checkDeviceConfiguration(deviceIndex: existingDevice.index)
+                
+                if isConfigured {
+                    NSLog("✅ Device already properly configured - no UI needed")
+                    DispatchQueue.main.async { completion(true) }
+                    return
+                } else {
+                    NSLog("🔧 Device needs reconfiguration - showing progress")
+                    // Montrer la fenêtre et reconfigurer
+                    DispatchQueue.main.async {
+                        self.showProgressPanel(message: "Reconfiguration du dispositif audio Milō...")
+                    }
+                    
+                    let success = self.configureDevice(deviceIndex: existingDevice.index)
+                    DispatchQueue.main.async {
+                        self.hideProgressPanel()
+                        completion(success)
+                    }
+                }
+            } else {
+                NSLog("❌ No Milō device found - showing progress and creating new one")
+                // Montrer la fenêtre et créer + configurer
+                DispatchQueue.main.async {
+                    self.showProgressPanel(message: "Création du dispositif audio Milō...")
+                }
+                
+                let deviceIndex = self.createMiloDevice()
+                
+                guard deviceIndex > 0 else {
+                    NSLog("❌ Failed to create Milō device")
+                    DispatchQueue.main.async {
+                        self.hideProgressPanel()
+                        completion(false)
+                    }
+                    return
+                }
+                
+                NSLog("✅ Created new Milō device with index: \(deviceIndex)")
+                let success = self.configureDevice(deviceIndex: deviceIndex)
+                
+                DispatchQueue.main.async {
+                    self.hideProgressPanel()
+                    completion(success)
+                }
             }
         }
     }

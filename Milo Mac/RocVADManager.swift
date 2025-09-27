@@ -10,10 +10,10 @@ class RocVADManager {
     private let repairPort = 10002
     private let controlPort = 10003
     
-    // Fenêtre de progression simple
-    private var progressWindow: NSWindow?
-    private var statusLabel: NSTextField?
-    private var progressBar: NSProgressIndicator?
+    // Window de progression (style NSAlert natif)
+    private var progressPanel: NSWindow?
+    private var progressLabel: NSTextField?
+    private var progressIndicator: NSProgressIndicator?
     
     // MARK: - Public Interface
     
@@ -63,15 +63,15 @@ class RocVADManager {
     func performInstallation(completion: @escaping (Bool) -> Void) {
         NSLog("🔧 Starting roc-vad installation...")
         
-        // Créer fenêtre de progression
-        createProgressWindow()
+        // Créer panel de progression (style NSAlert)
+        showProgressPanel(message: "Préparation de l'installation...")
         
-        // Installation en background mais avec UI sur main thread
+        // Installation en background
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             let installSuccess = self?.installRocVAD() ?? false
             
             DispatchQueue.main.async {
-                self?.hideProgressWindow()
+                self?.hideProgressPanel()
                 completion(installSuccess)
             }
         }
@@ -80,15 +80,14 @@ class RocVADManager {
     func configureDeviceOnly(completion: @escaping (Bool) -> Void) {
         NSLog("🔧 Configuring Milō audio device only...")
         
-        // Créer fenêtre de progression
-        createProgressWindow()
-        updateProgressStatus("Configuration du dispositif audio Milō...")
+        // Créer panel de progression
+        showProgressPanel(message: "Configuration du dispositif audio Milō...")
         
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             let success = self?.ensureDeviceConfigured() ?? false
             
             DispatchQueue.main.async {
-                self?.hideProgressWindow()
+                self?.hideProgressPanel()
                 completion(success)
             }
         }
@@ -97,18 +96,111 @@ class RocVADManager {
     func waitForDriverInitialization(completion: @escaping (Bool) -> Void) {
         NSLog("⏳ Starting driver initialization wait...")
         
-        // Créer fenêtre de progression pour l'attente
-        createWaitingWindow()
+        // Créer panel d'attente
+        showProgressPanel(message: "Attente d'initialisation du driver audio...")
         
         // Démarrer les tentatives en background
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             let success = self?.performDriverWaitRetries() ?? false
             
             DispatchQueue.main.async {
-                self?.hideWaitingWindow()
+                self?.hideProgressPanel()
                 completion(success)
             }
         }
+    }
+    
+    // MARK: - Progress Window Management (Style NSAlert natif avec Hidden Title Bar)
+    
+    private func showProgressPanel(message: String) {
+        // Créer une NSWindow avec Hidden Title Bar et effet visuel NSAlert
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 260, height: 190),
+            styleMask: [.titled, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.level = .floating
+        window.center()
+        window.isReleasedWhenClosed = false
+        
+        // Ajouter l'effet visuel NSAlert (transparence + flou comme les vrais NSAlert)
+        let visualEffectView = NSVisualEffectView()
+        visualEffectView.frame = window.contentView!.bounds
+        visualEffectView.autoresizingMask = [.width, .height]
+        visualEffectView.material = .popover  // Material identique aux NSAlert
+        visualEffectView.state = .active
+        visualEffectView.wantsLayer = true
+        visualEffectView.layer?.cornerRadius = 8
+        
+        window.contentView = visualEffectView
+        
+        // Container pour le contenu
+        let contentView = NSView(frame: visualEffectView.bounds)
+        contentView.autoresizingMask = [.width, .height]
+        visualEffectView.addSubview(contentView)
+        
+        // Icône de l'app (comme dans NSAlert) - 60x60 centré (+8px par rapport à 52x52)
+        let iconImageView = NSImageView()
+        iconImageView.frame = NSRect(x: (260 - 64) / 2, y: 106, width: 64, height: 64)
+        iconImageView.image = NSApp.applicationIconImage
+        iconImageView.imageScaling = .scaleProportionallyDown
+        contentView.addSubview(iconImageView)
+        
+        // Titre principal (comme messageText dans NSAlert) - 12px de marge supplémentaire sous l'icône
+        let titleLabel = NSTextField(labelWithString: "Installation Milō Mac")
+        titleLabel.font = .boldSystemFont(ofSize: 13)
+        titleLabel.alignment = .center
+        titleLabel.backgroundColor = .clear
+        titleLabel.isBezeled = false
+        titleLabel.isEditable = false
+        titleLabel.textColor = .labelColor
+        titleLabel.frame = NSRect(x: 20, y: 66, width: 220, height: 20)
+        contentView.addSubview(titleLabel)
+        
+        // Message de progression (comme informativeText dans NSAlert)
+        let messageLabel = NSTextField(labelWithString: message)
+        messageLabel.font = .systemFont(ofSize: 11)
+        messageLabel.alignment = .center
+        messageLabel.backgroundColor = .clear
+        messageLabel.isBezeled = false
+        messageLabel.isEditable = false
+        messageLabel.textColor = .secondaryLabelColor
+        messageLabel.lineBreakMode = .byWordWrapping
+        messageLabel.maximumNumberOfLines = 2
+        messageLabel.frame = NSRect(x: 20, y: 33, width: 220, height: 30)
+        contentView.addSubview(messageLabel)
+        progressLabel = messageLabel
+        
+        // Barre de progression (comme accessoryView dans NSAlert)
+        let progress = NSProgressIndicator()
+        progress.style = .bar
+        progress.isIndeterminate = true
+        progress.frame = NSRect(x: 30, y: 7, width: 200, height: 28)
+        progress.startAnimation(nil)
+        contentView.addSubview(progress)
+        progressIndicator = progress
+        
+        window.makeKeyAndOrderFront(nil)
+        
+        progressPanel = window
+    }
+    
+    private func updateProgressMessage(_ message: String) {
+        DispatchQueue.main.async { [weak self] in
+            self?.progressLabel?.stringValue = message
+        }
+    }
+    
+    private func hideProgressPanel() {
+        progressIndicator?.stopAnimation(nil)
+        progressPanel?.close()
+        progressPanel = nil
+        progressLabel = nil
+        progressIndicator = nil
     }
     
     // MARK: - Installation Process
@@ -116,7 +208,7 @@ class RocVADManager {
     private func installRocVAD() -> Bool {
         NSLog("📦 Installing roc-vad...")
         
-        updateProgressStatus("Téléchargement et installation des dépendances (roc-vad) ...")
+        updateProgressMessage("Téléchargement et installation des dépendances (roc-vad)...")
         
         let script = """
         do shell script "sudo /bin/bash -c \\"$(curl -fsSL https://raw.githubusercontent.com/roc-streaming/roc-vad/HEAD/install.sh)\\"" with administrator privileges
@@ -131,7 +223,7 @@ class RocVADManager {
         // Attendre un peu pour que l'installation se termine
         Thread.sleep(forTimeInterval: 3.0)
         
-        updateProgressStatus("Vérification de l'installation...")
+        updateProgressMessage("Vérification de l'installation...")
         Thread.sleep(forTimeInterval: 1.0)
         
         // Vérifier que l'installation a réussi
@@ -139,7 +231,7 @@ class RocVADManager {
         let success = FileManager.default.fileExists(atPath: rocVADPath)
         
         if success {
-            updateProgressStatus("Première partie de l’installation terminée")
+            updateProgressMessage("Installation terminée avec succès")
             Thread.sleep(forTimeInterval: 1.0)
             NSLog("✅ roc-vad installation completed successfully")
         } else {
@@ -149,66 +241,7 @@ class RocVADManager {
         return success
     }
     
-    // MARK: - Progress Window
-    
-    private func createProgressWindow() {
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 400, height: 120),
-            styleMask: [.titled],
-            backing: .buffered,
-            defer: false
-        )
-        
-        window.title = "Installation de Milō pour Mac"
-        window.center()
-        window.level = .floating
-        window.isReleasedWhenClosed = false
-        
-        let contentView = NSView(frame: window.contentView!.bounds)
-        
-        // Label de statut
-        let label = NSTextField(labelWithString: "Préparation de l'installation...")
-        label.alignment = .center
-        label.font = .systemFont(ofSize: 13)
-        label.frame = NSRect(x: 20, y: 70, width: 360, height: 20)
-        contentView.addSubview(label)
-        statusLabel = label
-        
-        // Barre de progression
-        let progress = NSProgressIndicator()
-        progress.style = .bar
-        progress.isIndeterminate = true
-        progress.frame = NSRect(x: 50, y: 30, width: 300, height: 20)
-        progress.startAnimation(nil)
-        contentView.addSubview(progress)
-        progressBar = progress
-        
-        window.contentView = contentView
-        window.makeKeyAndOrderFront(nil)
-        
-        progressWindow = window
-    }
-    
-    private func updateProgressStatus(_ message: String) {
-        DispatchQueue.main.async { [weak self] in
-            self?.statusLabel?.stringValue = message
-        }
-    }
-    
-    private func hideProgressWindow() {
-        progressBar?.stopAnimation(nil)
-        progressWindow?.close()
-        progressWindow = nil
-        statusLabel = nil
-        progressBar = nil
-    }
-    
-    
-    // MARK: - Driver Initialization Wait
-    
-    private var waitingWindow: NSWindow?
-    private var waitingStatusLabel: NSTextField?
-    private var waitingProgressBar: NSProgressIndicator?
+    // MARK: - Driver Wait Process
     
     private func performDriverWaitRetries() -> Bool {
         let retryDelays = [2.0, 5.0, 8.0, 12.0, 15.0] // Total ~42 secondes
@@ -217,7 +250,7 @@ class RocVADManager {
         for delay in retryDelays {
             attemptCount += 1
             
-            updateWaitingStatus("Attente d'initialisation du driver... (tentative \(attemptCount)/\(retryDelays.count))")
+            updateProgressMessage("Attente d'initialisation du driver... (tentative \(attemptCount)/\(retryDelays.count))")
             NSLog("🔄 Driver wait attempt \(attemptCount)/\(retryDelays.count)")
             
             // Attendre avant de tester
@@ -235,7 +268,7 @@ class RocVADManager {
             
             if task.terminationStatus == 0 {
                 NSLog("✅ Driver became available after \(attemptCount) attempts")
-                updateWaitingStatus("Driver initialisé avec succès !")
+                updateProgressMessage("Driver initialisé avec succès !")
                 Thread.sleep(forTimeInterval: 1.0)
                 return true
             }
@@ -243,58 +276,6 @@ class RocVADManager {
         
         NSLog("❌ Driver still not available after \(attemptCount) attempts")
         return false
-    }
-    
-    private func createWaitingWindow() {
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 400, height: 120),
-            styleMask: [.titled],
-            backing: .buffered,
-            defer: false
-        )
-        
-        window.title = "Initialisation de Milō pour Mac "
-        window.center()
-        window.level = .floating
-        window.isReleasedWhenClosed = false
-        
-        let contentView = NSView(frame: window.contentView!.bounds)
-        
-        // Label de statut
-        let label = NSTextField(labelWithString: "Attente d'initialisation du driver audio...")
-        label.alignment = .center
-        label.font = .systemFont(ofSize: 13)
-        label.frame = NSRect(x: 20, y: 70, width: 360, height: 20)
-        contentView.addSubview(label)
-        waitingStatusLabel = label
-        
-        // Barre de progression
-        let progress = NSProgressIndicator()
-        progress.style = .bar
-        progress.isIndeterminate = true
-        progress.frame = NSRect(x: 50, y: 30, width: 300, height: 20)
-        progress.startAnimation(nil)
-        contentView.addSubview(progress)
-        waitingProgressBar = progress
-        
-        window.contentView = contentView
-        window.makeKeyAndOrderFront(nil)
-        
-        waitingWindow = window
-    }
-    
-    private func updateWaitingStatus(_ message: String) {
-        DispatchQueue.main.async { [weak self] in
-            self?.waitingStatusLabel?.stringValue = message
-        }
-    }
-    
-    private func hideWaitingWindow() {
-        waitingProgressBar?.stopAnimation(nil)
-        waitingWindow?.close()
-        waitingWindow = nil
-        waitingStatusLabel = nil
-        waitingProgressBar = nil
     }
     
     private func ensureDeviceConfigured() -> Bool {

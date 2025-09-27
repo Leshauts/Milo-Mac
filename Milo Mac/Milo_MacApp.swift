@@ -80,7 +80,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let alert = NSAlert()
         alert.messageText = "Initialisation en cours"
         alert.informativeText = """
-        Le driver audio roc-vad prend plus de temps que prévu à s'initialiser.
+        Le driver audio Milō prend plus de temps que prévu à s'initialiser.
         
         Vous pouvez continuer sans la fonctionnalité audio Mac ou redémarrer pour réessayer.
         """
@@ -103,9 +103,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let alert = NSAlert()
         alert.messageText = "Redémarrage requis"
         alert.informativeText = """
-        roc-vad est installé mais le driver audio n'est pas encore chargé.
+        Milō est installé sur le Mac mais le driver audio n'est pas encore chargé.
         
-        Veuillez redémarrer votre Mac pour que la sortie audio "Milō" soit disponible.
+        Veuillez redémarrer votre ordinateur pour que la sortie audio "Milō" soit disponible.
         """
         alert.addButton(withTitle: "Redémarrer maintenant")
         alert.addButton(withTitle: "Continuer sans audio Mac")
@@ -125,7 +125,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         alert.messageText = "Configuration Milō Mac"
         alert.informativeText = "Milō peut utiliser l'audio de votre Mac comme source audio.\nVoulez-vous installer cette fonctionnalité ?"
         alert.addButton(withTitle: "Contrôleur + Audio Mac")
-        alert.addButton(withTitle: "Contrôleur seulement")
+        alert.addButton(withTitle: "Annuler l'installation")
         alert.alertStyle = .informational
         
         let response = alert.runModal()
@@ -134,8 +134,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             NSLog("🔧 User chose to install roc-vad")
             startInstallationProcess()
         } else {
-            NSLog("✅ User chose controller only")
-            initializeMiloApp()
+            NSLog("❌ User cancelled installation")
+            NSApplication.shared.terminate(nil)
         }
     }
     
@@ -168,23 +168,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         Souhaitez-vous que Milo Mac se lance automatiquement au démarrage pour configurer le dispositif audio ?
         """
         alert.addButton(withTitle: "Redémarrer + Lancement auto")
-        alert.addButton(withTitle: "Redémarrer seulement")
         alert.addButton(withTitle: "Redémarrer plus tard")
         alert.alertStyle = .informational
         
         let response = alert.runModal()
         
-        switch response {
-        case .alertFirstButtonReturn:
+        if response == .alertFirstButtonReturn {
             // Activer launch at login puis redémarrer
             enableLaunchAtLogin()
             restartMac()
-            
-        case .alertSecondButtonReturn:
-            // Redémarrer sans launch at login
-            restartMac()
-            
-        default:
+        } else {
             // Redémarrer plus tard - quitter l'app
             NSLog("✅ User chose to restart later - quitting app")
             NSApplication.shared.terminate(nil)
@@ -194,9 +187,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func showInstallationError() {
         let alert = NSAlert()
         alert.messageText = "Erreur d'installation"
-        alert.informativeText = "L'installation de roc-vad a échoué. Voulez-vous réessayer ou continuer sans audio Mac ?"
+        alert.informativeText = "L'installation de roc-vad a échoué. Voulez-vous réessayer ?"
         alert.addButton(withTitle: "Réessayer")
-        alert.addButton(withTitle: "Continuer sans audio Mac")
+        alert.addButton(withTitle: "Annuler")
         alert.alertStyle = .warning
         
         let response = alert.runModal()
@@ -204,7 +197,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if response == .alertFirstButtonReturn {
             startInstallationProcess()
         } else {
-            initializeMiloApp()
+            NSLog("❌ User cancelled after installation error")
+            NSApplication.shared.terminate(nil)
         }
     }
     

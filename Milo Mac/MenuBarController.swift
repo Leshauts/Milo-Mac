@@ -187,6 +187,7 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
     
     // MARK: - Menu Building
     private func buildConnectedMenu(_ menu: NSMenu, isPreferences: Bool) {
+        
         addVolumeSection(to: menu)
         addAudioSourcesSection(to: menu)
         addSystemControlsSection(to: menu)
@@ -199,7 +200,7 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
     private func buildDisconnectedMenu(_ menu: NSMenu, isPreferences: Bool) {
         let disconnectedItem = MenuItemFactory.createDisconnectedItem()
         menu.addItem(disconnectedItem)
-        
+                
         if isPreferences {
             menu.addItem(NSMenuItem.separator())
             addPreferencesSection(to: menu, connected: false)
@@ -674,6 +675,8 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
 
 // MARK: - MiloConnectionManagerDelegate
 extension MenuBarController {
+    
+    
     func miloDidConnect() {
         isMiloConnected = true
         updateIcon()

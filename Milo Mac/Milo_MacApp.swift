@@ -11,29 +11,58 @@ struct Milo_MacApp: App {
     }
 }
 
+@MainActor
 class AppDelegate: NSObject, NSApplicationDelegate {
     var statusItem: NSStatusItem!
     var menuBarController: MenuBarController!
+    var rocVADManager: RocVADManager!
     
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Cacher l'icône du dock - méthode renforcée
         NSApp.setActivationPolicy(.accessory)
         
-        // Alternative si la première méthode ne fonctionne pas
         if NSApp.activationPolicy() != .accessory {
             NSApp.setActivationPolicy(.prohibited)
             NSApp.setActivationPolicy(.accessory)
         }
         
-        // Créer l'item de menu bar
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        NSLog("🚀 Milo Mac starting...")
         
-        // Initialiser le contrôleur
+        setupRocVAD()
+    }
+    
+    private func setupRocVAD() {
+        NSLog("🔧 Setting up roc-vad...")
+        
+        rocVADManager = RocVADManager()
+        rocVADManager.delegate = self
+        rocVADManager.ensureSetup()
+    }
+    
+    private func initializeMiloApp() {
+        NSLog("🎯 Initializing Milo app interface...")
+        
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         menuBarController = MenuBarController(statusItem: statusItem)
+        
+        NSLog("✅ Milo Mac ready")
     }
     
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        // Empêcher l'apparition dans le dock lors de la réouverture
         return false
+    }
+}
+
+// MARK: - RocVADManagerDelegate
+extension AppDelegate: RocVADManagerDelegate {
+    nonisolated func rocVADSetupCompleted(success: Bool) {
+        Task { @MainActor in
+            if success {
+                NSLog("✅ Setup completed successfully")
+                self.initializeMiloApp()
+            } else {
+                NSLog("⚠️ Setup failed, continuing anyway...")
+                self.initializeMiloApp()
+            }
+        }
     }
 }

@@ -63,12 +63,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let alert = NSAlert()
         alert.messageText = "Redémarrage requis"
         alert.informativeText = """
-        roc-vad est installé mais le driver audio n'est pas encore chargé.
+        La sortie audio Milō est installé mais le driver audio n'est pas encore chargé.
         
         Veuillez redémarrer votre Mac pour que la sortie audio "Milō" soit disponible.
         """
-        alert.addButton(withTitle: "Redémarrer maintenant")
-        alert.addButton(withTitle: "Continuer sans audio Mac")
+        alert.addButton(withTitle: "Redémarrer maintenant pour terminer l'installation")
+        alert.addButton(withTitle: "Continuer sans la sortie audio Milō sur votre Mac")
         alert.alertStyle = .informational
         
         let response = alert.runModal()
@@ -119,15 +119,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     private func showRestartChoice() {
         let alert = NSAlert()
-        alert.messageText = "Installation terminée"
+        alert.messageText = "Installation presque terminée"
         alert.informativeText = """
-        L'installation de roc-vad est terminée avec succès !
-        
-        Pour que la sortie audio "Milō" soit disponible, votre Mac doit redémarrer.
+        Pour terminer l'installation et que la sortie audio "Milō" soit disponible, votre Mac doit redémarrer.
         
         Souhaitez-vous redémarrer maintenant ou plus tard ?
         """
-        alert.addButton(withTitle: "Redémarrer maintenant")
+        alert.addButton(withTitle: "Redémarrer maintenant pour terminer l'installation")
         alert.addButton(withTitle: "Redémarrer plus tard")
         alert.alertStyle = .informational
         
@@ -146,7 +144,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func showInstallationError() {
         let alert = NSAlert()
         alert.messageText = "Erreur d'installation"
-        alert.informativeText = "L'installation de roc-vad a échoué. Voulez-vous réessayer ou continuer sans audio Mac ?"
+        alert.informativeText = "L'installation de la sortie audio Milō a échoué. Voulez-vous réessayer ou continuer sans audio Mac ?"
         alert.addButton(withTitle: "Réessayer")
         alert.addButton(withTitle: "Continuer sans audio Mac")
         alert.alertStyle = .warning

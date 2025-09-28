@@ -144,7 +144,7 @@ class VolumeHUD {
               let volumeLabel = volumeLabel else { return }
         
         // --- Mise à jour du texte avec Space Mono ---
-        let volumeText = "\(volume) %"
+        let volumeText = L("volume.percentage", volume)
         let spaceMonoFont = getSpaceMonoFont(size: 16)
         
         let attributedString = NSMutableAttributedString(string: volumeText)

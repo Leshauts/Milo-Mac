@@ -24,7 +24,7 @@ class MenuItemFactory {
         let item = NSMenuItem()
         let headerView = NSView(frame: NSRect(x: 0, y: 0, width: containerWidth, height: 28))
         
-        let titleLabel = createLabel(text: "Volume de Milō", font: .systemFont(ofSize: 13, weight: .semibold))
+        let titleLabel = createLabel(text: L("menu.volume.title"), font: .systemFont(ofSize: 13, weight: .semibold))
         titleLabel.frame = NSRect(x: sideMargin, y: 4, width: 160, height: 16)
         
         headerView.addSubview(titleLabel)
@@ -53,7 +53,7 @@ class MenuItemFactory {
         let item = NSMenuItem()
         let containerView = MenuInteractionView(frame: NSRect(x: 0, y: 0, width: containerWidth, height: containerHeight))
         
-        let titleLabel = createLabel(text: "Incrément volume", font: .menuFont(ofSize: 13))
+        let titleLabel = createLabel(text: L("config.volume_delta.title"), font: .menuFont(ofSize: 13))
         titleLabel.frame = NSRect(x: sideMargin, y: 8, width: 120, height: 16)
         
         let controls = createDeltaControls(currentDelta: currentDelta, target: target, decreaseAction: decreaseAction, increaseAction: increaseAction)
@@ -76,10 +76,10 @@ class MenuItemFactory {
         valueLabel.alignment = .center
         valueLabel.frame = NSRect(x: containerWidth - 66, y: 8, width: 24, height: 16)
         
-        let decreaseButton = createDeltaButton(title: "−", target: target, action: decreaseAction, enabled: currentDelta > 1)
+        let decreaseButton = createDeltaButton(title: L("button.decrease"), target: target, action: decreaseAction, enabled: currentDelta > 1)
         decreaseButton.frame = NSRect(x: containerWidth - 94, y: 6, width: 24, height: 20)
         
-        let increaseButton = createDeltaButton(title: "+", target: target, action: increaseAction, enabled: currentDelta < 10)
+        let increaseButton = createDeltaButton(title: L("button.increase"), target: target, action: increaseAction, enabled: currentDelta < 10)
         increaseButton.frame = NSRect(x: containerWidth - 38, y: 6, width: 24, height: 20)
         
         return [valueLabel, decreaseButton, increaseButton]
@@ -97,19 +97,19 @@ class MenuItemFactory {
         return button
     }
     
-    // MARK: - Audio Sources Section (inchangé)
+    // MARK: - Audio Sources Section
     static func createAudioSourcesSection(state: MiloState?, loadingStates: [String: Bool] = [:], target: AnyObject, action: Selector) -> [NSMenuItem] {
         var items: [NSMenuItem] = []
         
-        items.append(createSecondaryHeader(title: "Sortie"))
+        items.append(createSecondaryHeader(title: L("menu.audio_sources.title")))
         
         let activeSource = state?.activeSource ?? "none"
         let targetSource = state?.targetSource
         
         let sourceConfigs = [
-            ("Spotify", "music.note", "librespot"),
-            ("Bluetooth", "bluetooth", "bluetooth"),
-            ("macOS", "desktopcomputer", "roc")
+            (L("source.spotify"), "music.note", "librespot"),
+            (L("source.bluetooth"), "bluetooth", "bluetooth"),
+            (L("source.macos"), "desktopcomputer", "roc")
         ]
         
         for (title, iconName, sourceId) in sourceConfigs {
@@ -142,19 +142,18 @@ class MenuItemFactory {
         return items
     }
     
-    // MARK: - CORRIGÉ : System Controls Section utilise loadingStates directement
+    // MARK: - System Controls Section
     static func createSystemControlsSection(state: MiloState?, loadingStates: [String: Bool] = [:], target: AnyObject, action: Selector) -> [NSMenuItem] {
         var items: [NSMenuItem] = []
         
-        items.append(createSecondaryHeader(title: "Fonctionnalités"))
+        items.append(createSecondaryHeader(title: L("menu.features.title")))
         
         let systemConfigs = [
-            ("Multiroom", "speaker.wave.3", "multiroom", state?.multiroomEnabled ?? false),
-            ("Égaliseur", "slider.horizontal.3", "equalizer", state?.equalizerEnabled ?? false)
+            (L("feature.multiroom"), "speaker.wave.3", "multiroom", state?.multiroomEnabled ?? false),
+            (L("feature.equalizer"), "slider.horizontal.3", "equalizer", state?.equalizerEnabled ?? false)
         ]
         
         for (title, iconName, toggleId, currentlyEnabled) in systemConfigs {
-            // CORRECTION : Utiliser loadingStates directement au lieu de target_source
             let isLoading = loadingStates[toggleId] == true
             let isActive = isLoading || (!isLoading && currentlyEnabled)
             
@@ -179,7 +178,7 @@ class MenuItemFactory {
     
     // MARK: - Disconnected State
     static func createDisconnectedItem() -> NSMenuItem {
-        let item = NSMenuItem(title: "Milō n'est pas allumé", action: nil, keyEquivalent: "")
+        let item = NSMenuItem(title: L("status.disconnected"), action: nil, keyEquivalent: "")
         item.isEnabled = false
         return item
     }

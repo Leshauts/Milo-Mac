@@ -26,7 +26,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             NSApp.setActivationPolicy(.accessory)
         }
         
-        NSLog("🚀 Milo Mac starting...")
+        NSLog(L("log.milo_starting"))
         
         // Démarrer le processus d'installation/setup
         startSetupProcess()
@@ -78,14 +78,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     private func showDriverTimeoutAlert() {
         let alert = NSAlert()
-        alert.messageText = "Initialisation en cours"
-        alert.informativeText = """
-        Le driver audio Milō prend plus de temps que prévu à s'initialiser.
-        
-        Vous pouvez continuer sans la fonctionnalité audio Mac ou redémarrer pour réessayer.
-        """
-        alert.addButton(withTitle: "Continuer sans audio Mac")
-        alert.addButton(withTitle: "Redémarrer maintenant")
+        alert.messageText = L("setup.initialization.title")
+        alert.informativeText = L("setup.driver.timeout.message")
+        alert.addButton(withTitle: L("setup.driver.timeout.continue"))
+        alert.addButton(withTitle: L("setup.driver.timeout.restart"))
         alert.alertStyle = .informational
         
         let response = alert.runModal()
@@ -101,14 +97,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     private func showDriverNotLoadedAlert() {
         let alert = NSAlert()
-        alert.messageText = "Redémarrage requis"
-        alert.informativeText = """
-        Milō est installé sur le Mac mais le driver audio n'est pas encore chargé.
-        
-        Veuillez redémarrer votre ordinateur pour que la sortie audio "Milō" soit disponible.
-        """
-        alert.addButton(withTitle: "Redémarrer maintenant")
-        alert.addButton(withTitle: "Continuer sans audio Mac")
+        alert.messageText = L("setup.restart.required")
+        alert.informativeText = L("setup.restart.message")
+        alert.addButton(withTitle: L("setup.restart.now"))
+        alert.addButton(withTitle: L("setup.restart.continue_without"))
         alert.alertStyle = .informational
         
         let response = alert.runModal()
@@ -122,10 +114,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     private func showInitialChoice() {
         let alert = NSAlert()
-        alert.messageText = "Configuration Milō Mac"
-        alert.informativeText = "Milō peut utiliser l'audio de votre Mac comme source audio.\nVoulez-vous installer cette fonctionnalité ?"
-        alert.addButton(withTitle: "Contrôleur + Audio Mac")
-        alert.addButton(withTitle: "Annuler l'installation")
+        alert.messageText = L("setup.main.title")
+        alert.informativeText = L("setup.main.message")
+        alert.addButton(withTitle: L("setup.main.install_button"))
+        alert.addButton(withTitle: L("setup.main.cancel_button"))
         alert.alertStyle = .informational
         
         let response = alert.runModal()
@@ -159,16 +151,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     private func showRestartChoice() {
         let alert = NSAlert()
-        alert.messageText = "Installation terminée"
-        alert.informativeText = """
-        L'installation de roc-vad est terminée avec succès !
-        
-        Pour que la sortie audio "Milō" soit disponible, votre Mac doit redémarrer.
-        
-        Souhaitez-vous que Milo Mac se lance automatiquement au démarrage pour configurer le dispositif audio ?
-        """
-        alert.addButton(withTitle: "Redémarrer + Lancement auto")
-        alert.addButton(withTitle: "Redémarrer plus tard")
+        alert.messageText = L("setup.installation.completed")
+        alert.informativeText = L("setup.installation.completed.message")
+        alert.addButton(withTitle: L("setup.installation.completed.restart_auto"))
+        alert.addButton(withTitle: L("setup.installation.completed.restart_later"))
         alert.alertStyle = .informational
         
         let response = alert.runModal()
@@ -186,10 +172,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     private func showInstallationError() {
         let alert = NSAlert()
-        alert.messageText = "Erreur d'installation"
-        alert.informativeText = "L'installation de roc-vad a échoué. Voulez-vous réessayer ?"
-        alert.addButton(withTitle: "Réessayer")
-        alert.addButton(withTitle: "Annuler")
+        alert.messageText = L("setup.installation.error")
+        alert.informativeText = L("setup.installation.error.message")
+        alert.addButton(withTitle: L("setup.installation.error.retry"))
+        alert.addButton(withTitle: L("setup.installation.error.cancel"))
         alert.alertStyle = .warning
         
         let response = alert.runModal()

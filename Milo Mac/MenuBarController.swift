@@ -59,7 +59,7 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
             return image
         }
         
-        let fallbackImage = NSImage(systemSymbolName: "speaker.wave.3", accessibilityDescription: "Milo")
+        let fallbackImage = NSImage(systemSymbolName: "speaker.wave.3", accessibilityDescription: L("accessibility.milo_icon"))
         fallbackImage?.isTemplate = true
         return fallbackImage
     }
@@ -256,7 +256,7 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
     
     private func addHotkeysToggle(to menu: NSMenu) {
         let hotkeysItem = MenuItemHelper.createSimpleToggleItem(
-            title: "Raccourcis volume (⌥↑/↓)",
+            title: L("config.hotkeys.title"),
             isEnabled: hotkeyManager?.isCurrentlyMonitoring() ?? false,
             target: self,
             action: #selector(toggleGlobalHotkeys)
@@ -278,7 +278,7 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
     
     private func addLaunchAtLoginToggle(to menu: NSMenu) {
         let launchAtLoginItem = MenuItemHelper.createSimpleToggleItem(
-            title: "Démarrer au démarrage du Mac",
+            title: L("config.launch_at_login"),
             isEnabled: isLaunchAtLoginEnabled(),
             target: self,
             action: #selector(toggleLaunchAtLogin)
@@ -288,7 +288,7 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
     
     private func addQuitItem(to menu: NSMenu) {
         let quitItem = MenuItemHelper.createSimpleMenuItem(
-            title: "Quitter",
+            title: L("config.quit"),
             target: self,
             action: #selector(quitApplication)
         )

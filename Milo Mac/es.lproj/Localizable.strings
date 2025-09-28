@@ -1,0 +1,83 @@
+/*
+   Localizable.strings (Spanish)
+   Milo Mac
+*/
+
+// MARK: - Menu Sections
+"menu.volume.title" = "Volumen de Milō";
+"menu.audio_sources.title" = "Salida";
+"menu.features.title" = "Funciones";
+
+// MARK: - Audio Sources
+"source.spotify" = "Spotify";
+"source.bluetooth" = "Bluetooth";
+"source.macos" = "macOS";
+
+// MARK: - Features
+"feature.multiroom" = "Multihabitación";
+"feature.equalizer" = "Ecualizador";
+
+// MARK: - Configuration Menu
+"config.hotkeys.title" = "Atajos de volumen (⌥↑/↓)";
+"config.volume_delta.title" = "Incremento de volumen";
+"config.launch_at_login" = "Iniciar al arrancar el Mac";
+"config.quit" = "Salir";
+
+// MARK: - Connection Status
+"status.disconnected" = "Milō no está encendido";
+
+// MARK: - Setup/Installation - Main Titles
+"setup.main.title" = "Configuración de Milō Mac";
+"setup.installation.title" = "Instalación de Milō Mac";
+"setup.installation.completed" = "Instalación Completada";
+"setup.installation.error" = "Error de Instalación";
+"setup.restart.required" = "Reinicio Requerido";
+"setup.initialization.title" = "Inicialización en Progreso";
+
+// MARK: - Setup/Installation - Messages
+"setup.main.message" = "Milō puede usar el audio de tu Mac como fuente de audio.\n¿Te gustaría instalar esta función?";
+"setup.main.install_button" = "Controlador + Audio Mac";
+"setup.main.cancel_button" = "Cancelar Instalación";
+
+"setup.installation.completed.message" = "¡La instalación de roc-vad se ha completado con éxito!\n\nPara que la salida de audio \"Milō\" esté disponible, tu Mac debe reiniciarse.\n\n¿Te gustaría que Milo Mac se inicie automáticamente al arrancar para configurar el dispositivo de audio?";
+"setup.installation.completed.restart_auto" = "Reiniciar + Inicio Automático";
+"setup.installation.completed.restart_later" = "Reiniciar Más Tarde";
+
+"setup.installation.error.message" = "La instalación de roc-vad ha fallado. ¿Te gustaría intentarlo de nuevo?";
+"setup.installation.error.retry" = "Reintentar";
+"setup.installation.error.cancel" = "Cancelar";
+
+"setup.restart.message" = "Milō está instalado en Mac pero el controlador de audio aún no está cargado.\n\nPor favor, reinicia tu computadora para que la salida de audio \"Milō\" esté disponible.";
+"setup.restart.now" = "Reiniciar Ahora";
+"setup.restart.continue_without" = "Continuar sin Audio Mac";
+
+"setup.driver.timeout.message" = "El controlador de audio Milō está tardando más de lo esperado en inicializarse.\n\nPuedes continuar sin la función de audio Mac o reiniciar para intentar de nuevo.";
+"setup.driver.timeout.continue" = "Continuar sin Audio Mac";
+"setup.driver.timeout.restart" = "Reiniciar Ahora";
+
+// MARK: - Installation Progress Messages
+"progress.preparing" = "Preparando instalación...";
+"progress.downloading" = "Descargando e instalando dependencias (roc-vad)...";
+"progress.verifying" = "Verificando instalación...";
+"progress.installation_complete" = "Instalación completada con éxito";
+"progress.reconfiguring_device" = "Reconfigurando dispositivo de audio Milō...";
+"progress.creating_device" = "Creando dispositivo de audio Milō...";
+"progress.driver_waiting" = "Esperando inicialización del controlador de audio...";
+"progress.driver_waiting_attempt" = "Esperando inicialización del controlador... (intento %d/%d)";
+"progress.driver_initialized" = "¡Controlador inicializado con éxito!";
+
+// MARK: - Volume HUD
+"volume.percentage" = "%d %%";
+
+// MARK: - Accessibility
+"accessibility.volume_slider" = "Control de Volumen";
+"accessibility.milo_icon" = "Milo";
+
+// MARK: - Buttons
+"button.decrease" = "−";
+"button.increase" = "+";
+
+// MARK: - Logging/Debug (optional, can remain in English)
+"log.milo_starting" = "Milo Mac starting...";
+"log.installation_success" = "roc-vad installation completed successfully";
+"log.installation_failed" = "roc-vad installation failed";

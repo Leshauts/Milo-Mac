@@ -64,7 +64,7 @@ class RocVADManager {
         NSLog("🔧 Starting roc-vad installation...")
         
         // Créer panel de progression (style NSAlert)
-        showProgressPanel(message: "Préparation de l'installation...")
+        showProgressPanel(message: L("progress.preparing"))
         
         // Installation en background
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
@@ -103,7 +103,7 @@ class RocVADManager {
                     NSLog("🔧 Device needs reconfiguration - showing progress")
                     // Montrer la fenêtre et reconfigurer
                     DispatchQueue.main.async {
-                        self.showProgressPanel(message: "Reconfiguration du dispositif audio Milō...")
+                        self.showProgressPanel(message: L("progress.reconfiguring_device"))
                     }
                     
                     let success = self.configureDevice(deviceIndex: existingDevice.index)
@@ -116,7 +116,7 @@ class RocVADManager {
                 NSLog("❌ No Milō device found - showing progress and creating new one")
                 // Montrer la fenêtre et créer + configurer
                 DispatchQueue.main.async {
-                    self.showProgressPanel(message: "Création du dispositif audio Milō...")
+                    self.showProgressPanel(message: L("progress.creating_device"))
                 }
                 
                 let deviceIndex = self.createMiloDevice()
@@ -145,7 +145,7 @@ class RocVADManager {
         NSLog("⏳ Starting driver initialization wait...")
         
         // Créer panel d'attente
-        showProgressPanel(message: "Attente d'initialisation du driver audio...")
+        showProgressPanel(message: L("progress.driver_waiting"))
         
         // Démarrer les tentatives en background
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
@@ -199,7 +199,7 @@ class RocVADManager {
         contentView.addSubview(iconImageView)
         
         // Titre principal (comme messageText dans NSAlert) - 12px de marge supplémentaire sous l'icône
-        let titleLabel = NSTextField(labelWithString: "Installation Milō Mac")
+        let titleLabel = NSTextField(labelWithString: L("setup.installation.title"))
         titleLabel.font = .boldSystemFont(ofSize: 13)
         titleLabel.alignment = .center
         titleLabel.backgroundColor = .clear
@@ -256,7 +256,7 @@ class RocVADManager {
     private func installRocVAD() -> Bool {
         NSLog("📦 Installing roc-vad...")
         
-        updateProgressMessage("Téléchargement et installation des dépendances (roc-vad)...")
+        updateProgressMessage(L("progress.downloading"))
         
         let script = """
         do shell script "sudo /bin/bash -c \\"$(curl -fsSL https://raw.githubusercontent.com/roc-streaming/roc-vad/HEAD/install.sh)\\"" with administrator privileges
@@ -271,7 +271,7 @@ class RocVADManager {
         // Attendre un peu pour que l'installation se termine
         Thread.sleep(forTimeInterval: 3.0)
         
-        updateProgressMessage("Vérification de l'installation...")
+        updateProgressMessage(L("progress.verifying"))
         Thread.sleep(forTimeInterval: 1.0)
         
         // Vérifier que l'installation a réussi
@@ -279,11 +279,11 @@ class RocVADManager {
         let success = FileManager.default.fileExists(atPath: rocVADPath)
         
         if success {
-            updateProgressMessage("Installation terminée avec succès")
+            updateProgressMessage(L("progress.installation_complete"))
             Thread.sleep(forTimeInterval: 1.0)
-            NSLog("✅ roc-vad installation completed successfully")
+            NSLog(L("log.installation_success"))
         } else {
-            NSLog("❌ roc-vad installation failed")
+            NSLog(L("log.installation_failed"))
         }
         
         return success
@@ -298,7 +298,7 @@ class RocVADManager {
         for delay in retryDelays {
             attemptCount += 1
             
-            updateProgressMessage("Attente d'initialisation du driver... (tentative \(attemptCount)/\(retryDelays.count))")
+            updateProgressMessage(L("progress.driver_waiting_attempt", attemptCount, retryDelays.count))
             NSLog("🔄 Driver wait attempt \(attemptCount)/\(retryDelays.count)")
             
             // Attendre avant de tester
@@ -316,7 +316,7 @@ class RocVADManager {
             
             if task.terminationStatus == 0 {
                 NSLog("✅ Driver became available after \(attemptCount) attempts")
-                updateProgressMessage("Driver initialisé avec succès !")
+                updateProgressMessage(L("progress.driver_initialized"))
                 Thread.sleep(forTimeInterval: 1.0)
                 return true
             }

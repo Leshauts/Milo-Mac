@@ -15,7 +15,8 @@ class MiloConnectionManager: NSObject {
     private let host = "milo.local"
     private let httpPort = 80
     private let wsPort = 8000
-    
+    private var resolvedIPv4: String?
+
     // État simple
     private var isConnected = false
     private var shouldConnect = true
@@ -45,7 +46,42 @@ class MiloConnectionManager: NSObject {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 5.0
         config.timeoutIntervalForResource = 30.0
+        config.requestCachePolicy = .reloadIgnoringLocalCacheData
+        config.urlCache = nil
         urlSession = URLSession(configuration: config, delegate: self, delegateQueue: nil)
+    }
+
+    private func resetURLSession() {
+        urlSession?.invalidateAndCancel()
+        setupURLSession()
+        resolveIPv4Address()
+        NSLog("🔄 URLSession reset to clear stale connections")
+    }
+
+    /// Résout le hostname en IPv4 et le cache
+    private func resolveIPv4Address() {
+        let host = CFHostCreateWithName(nil, self.host as CFString).takeRetainedValue()
+        CFHostStartInfoResolution(host, .addresses, nil)
+
+        var success: DarwinBoolean = false
+        if let addresses = CFHostGetAddressing(host, &success)?.takeUnretainedValue() as NSArray? {
+            for case let address as NSData in addresses {
+                var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+                if getnameinfo(address.bytes.assumingMemoryBound(to: sockaddr.self),
+                             socklen_t(address.length),
+                             &hostname,
+                             socklen_t(hostname.count),
+                             nil, 0, NI_NUMERICHOST) == 0 {
+                    let ipAddress = String(cString: hostname)
+                    // Ne garder que l'IPv4 (pas d'IPv6 avec ":")
+                    if !ipAddress.contains(":") {
+                        resolvedIPv4 = ipAddress
+                        NSLog("✅ Resolved \(self.host) to IPv4: \(ipAddress)")
+                        return
+                    }
+                }
+            }
+        }
     }
     
     // MARK: - Public Interface
@@ -70,6 +106,15 @@ class MiloConnectionManager: NSObject {
     
     func isCurrentlyConnected() -> Bool {
         return isConnected
+    }
+
+    func forceReconnect() {
+        guard isConnected else { return }
+
+        NSLog("🔄 Forcing reconnection to clear stale state...")
+        Task { @MainActor in
+            handleDisconnection()
+        }
     }
     
     // MARK: - mDNS Discovery
@@ -160,30 +205,35 @@ class MiloConnectionManager: NSObject {
     @MainActor
     private func connectToMilo() async {
         guard shouldConnect && !isConnected else { return }
-        
+
         NSLog("🔌 Connecting to Milo...")
-        
+
         // Arrêter retry - on a trouvé Milo !
         stopRetry()
-        
+
+        // Reset URLSession pour éviter les connexions TCP stales
+        resetURLSession()
+
         // Connecter WebSocket
         await connectWebSocket()
     }
     
     private func connectWebSocket() async {
-        let urlString = "ws://\(host):\(wsPort)/ws"
+        // Utiliser l'IP IPv4 si disponible pour éviter les timeouts DNS
+        let hostToUse = resolvedIPv4 ?? host
+        let urlString = "ws://\(hostToUse):\(wsPort)/ws"
         guard let url = URL(string: urlString) else {
             NSLog("❌ Invalid WebSocket URL")
             return
         }
-        
+
         // Nettoyer l'ancienne connexion
         cleanupConnection()
-        
+
         NSLog("🌐 Connecting WebSocket to \(urlString)...")
         webSocketTask = urlSession?.webSocketTask(with: url)
         webSocketTask?.resume()
-        
+
         startListening()
     }
     
@@ -292,12 +342,12 @@ class MiloConnectionManager: NSObject {
     
     private func handleConnectionSuccess() {
         NSLog("🎉 Milo connected successfully!")
-        
+
         isConnected = true
-        
-        // Créer l'API service
+
+        // Créer un nouveau API service avec session fraîche
         apiService = MiloAPIService(host: host, port: httpPort)
-        
+
         delegate?.miloDidConnect()
     }
     

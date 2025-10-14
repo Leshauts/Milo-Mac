@@ -28,11 +28,14 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
     
     // MARK: - Background Refresh
     private var backgroundRefreshTimer: Timer?
-    
+    private var consecutiveRefreshFailures = 0
+    private var lastSuccessfulRefresh: Date?
+
     // MARK: - Constants
     private let loadingTimeoutDuration: TimeInterval = 15.0
     private let functionalityLoadingTimeout: TimeInterval = 10.0
     private let minimumFunctionalityLoadingDuration: TimeInterval = 1.2
+    private let maxConsecutiveFailures = 3
     
     // MARK: - Initialization
     init(statusItem: NSStatusItem) {
@@ -82,12 +85,30 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
     
     private func startBackgroundRefresh() {
         backgroundRefreshTimer?.invalidate()
+        consecutiveRefreshFailures = 0
+        lastSuccessfulRefresh = Date()
+
         backgroundRefreshTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self] _ in
             guard let self = self, self.isMiloConnected, !self.isMenuOpen else { return }
-            
+
+            // Arrêter le refresh si trop d'échecs consécutifs
+            if self.consecutiveRefreshFailures >= self.maxConsecutiveFailures {
+                NSLog("⚠️ Background refresh paused after \(self.consecutiveRefreshFailures) failures")
+                return
+            }
+
             Task {
-                await self.refreshState()
-                await self.refreshVolumeStatus()
+                let stateSuccess = await self.refreshState()
+                let volumeSuccess = await self.refreshVolumeStatus()
+
+                await MainActor.run {
+                    if stateSuccess || volumeSuccess {
+                        self.consecutiveRefreshFailures = 0
+                        self.lastSuccessfulRefresh = Date()
+                    } else {
+                        self.consecutiveRefreshFailures += 1
+                    }
+                }
             }
         }
     }
@@ -623,10 +644,44 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
     // MARK: - Data Refresh
     private func refreshMenuData() {
         Task {
-            await refreshState()
-            await refreshVolumeStatus()
-            
+            // Si échecs consécutifs détectés, forcer un reset de session
+            if consecutiveRefreshFailures >= maxConsecutiveFailures {
+                NSLog("🔄 Forcing API session reset due to persistent failures")
+                connectionManager.getAPIService()?.resetSession()
+                consecutiveRefreshFailures = 0
+            }
+
+            // Retry avec timeout plus court pour le menu
+            var attempts = 0
+            let maxAttempts = 2
+
+            while attempts < maxAttempts {
+                let stateSuccess = await refreshState()
+                let volumeSuccess = await refreshVolumeStatus()
+
+                if stateSuccess || volumeSuccess {
+                    await MainActor.run {
+                        consecutiveRefreshFailures = 0
+                        lastSuccessfulRefresh = Date()
+
+                        if let menu = self.activeMenu {
+                            self.updateMenuInRealTime(menu)
+                        }
+                    }
+                    return
+                }
+
+                attempts += 1
+                if attempts < maxAttempts {
+                    try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s entre les tentatives
+                }
+            }
+
+            // Échec après toutes les tentatives
             await MainActor.run {
+                consecutiveRefreshFailures += 1
+                NSLog("⚠️ Menu refresh failed after \(maxAttempts) attempts")
+
                 if let menu = self.activeMenu {
                     self.updateMenuInRealTime(menu)
                 }
@@ -634,33 +689,39 @@ class MenuBarController: NSObject, MiloConnectionManagerDelegate {
         }
     }
     
-    private func refreshState() async {
-        guard let apiService = connectionManager.getAPIService() else { return }
-        
+    @discardableResult
+    private func refreshState() async -> Bool {
+        guard let apiService = connectionManager.getAPIService() else { return false }
+
         do {
             let state = try await apiService.fetchState()
             await MainActor.run { self.currentState = state }
+            return true
         } catch {
-            // Handle error silently
+            // Échec silencieux
+            return false
         }
     }
-    
-    private func refreshVolumeStatus() async {
-        guard let apiService = connectionManager.getAPIService() else { return }
-        
+
+    @discardableResult
+    private func refreshVolumeStatus() async -> Bool {
+        guard let apiService = connectionManager.getAPIService() else { return false }
+
         do {
             let volumeStatus = try await apiService.getVolumeStatus()
             await MainActor.run {
                 let oldVolume = self.currentVolume?.volume ?? -1
                 self.currentVolume = volumeStatus
                 self.volumeController.setCurrentVolume(volumeStatus)
-                
+
                 if oldVolume != volumeStatus.volume {
                     self.volumeController.updateSliderFromWebSocket(volumeStatus.volume)
                 }
             }
+            return true
         } catch {
-            // Handle error silently
+            // Échec silencieux
+            return false
         }
     }
     
@@ -680,11 +741,15 @@ extension MenuBarController {
     func miloDidConnect() {
         isMiloConnected = true
         updateIcon()
-        
+
         if let apiService = connectionManager.getAPIService() {
             volumeController.apiService = apiService
         }
-        
+
+        // Reset failure counters on successful connection
+        consecutiveRefreshFailures = 0
+        lastSuccessfulRefresh = Date()
+
         hotkeyManager?.startMonitoring()
         startBackgroundRefresh()
         refreshMenuData()

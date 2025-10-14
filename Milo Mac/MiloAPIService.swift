@@ -18,20 +18,80 @@ struct VolumeStatus {
 
 class MiloAPIService {
     private let baseURL: String
-    private let session: URLSession
-    
+    private var session: URLSession
+    private let host: String
+    private let port: Int
+    private var resolvedIPv4: String?
+
     init(host: String, port: Int = 80) {
+        self.host = host
+        self.port = port
         self.baseURL = "http://\(host):\(port)"
-        
+
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 3.0
         config.timeoutIntervalForResource = 5.0
         config.waitsForConnectivity = false
+        config.requestCachePolicy = .reloadIgnoringLocalCacheData
+        config.urlCache = nil
+
         self.session = URLSession(configuration: config)
+
+        // Résoudre l'IP IPv4 au démarrage
+        resolveIPv4Address()
+    }
+
+    /// Recréer la session pour éviter les connexions TCP stales
+    func resetSession() {
+        session.invalidateAndCancel()
+
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 3.0
+        config.timeoutIntervalForResource = 5.0
+        config.waitsForConnectivity = false
+        config.requestCachePolicy = .reloadIgnoringLocalCacheData
+        config.urlCache = nil
+
+        session = URLSession(configuration: config)
+
+        // Re-résoudre l'IP
+        resolveIPv4Address()
+    }
+
+    /// Résout le hostname en IPv4 et le cache
+    private func resolveIPv4Address() {
+        let host = CFHostCreateWithName(nil, self.host as CFString).takeRetainedValue()
+        CFHostStartInfoResolution(host, .addresses, nil)
+
+        var success: DarwinBoolean = false
+        if let addresses = CFHostGetAddressing(host, &success)?.takeUnretainedValue() as NSArray? {
+            for case let address as NSData in addresses {
+                var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+                if getnameinfo(address.bytes.assumingMemoryBound(to: sockaddr.self),
+                             socklen_t(address.length),
+                             &hostname,
+                             socklen_t(hostname.count),
+                             nil, 0, NI_NUMERICHOST) == 0 {
+                    let ipAddress = String(cString: hostname)
+                    // Ne garder que l'IPv4 (pas d'IPv6 avec ":")
+                    if !ipAddress.contains(":") {
+                        resolvedIPv4 = ipAddress
+                        NSLog("✅ Resolved \(self.host) to IPv4: \(ipAddress)")
+                        return
+                    }
+                }
+            }
+        }
+    }
+
+    /// Construit l'URL en utilisant l'IP IPv4 si disponible
+    private func buildURL(path: String) -> URL? {
+        let hostToUse = resolvedIPv4 ?? host
+        return URL(string: "http://\(hostToUse):\(port)\(path)")
     }
     
     func fetchState() async throws -> MiloState {
-        guard let url = URL(string: "\(baseURL)/api/audio/state") else {
+        guard let url = buildURL(path: "/api/audio/state") else {
             throw APIError.invalidURL
         }
         
@@ -61,7 +121,7 @@ class MiloAPIService {
     }
     
     func changeSource(_ source: String) async throws {
-        guard let url = URL(string: "\(baseURL)/api/audio/source/\(source)") else {
+        guard let url = buildURL(path: "/api/audio/source/\(source)") else {
             throw APIError.invalidURL
         }
         
@@ -77,7 +137,7 @@ class MiloAPIService {
     }
     
     func setMultiroom(_ enabled: Bool) async throws {
-        guard let url = URL(string: "\(baseURL)/api/routing/multiroom/\(enabled)") else {
+        guard let url = buildURL(path: "/api/routing/multiroom/\(enabled)") else {
             throw APIError.invalidURL
         }
         
@@ -93,7 +153,7 @@ class MiloAPIService {
     }
     
     func setEqualizer(_ enabled: Bool) async throws {
-        guard let url = URL(string: "\(baseURL)/api/routing/equalizer/\(enabled)") else {
+        guard let url = buildURL(path: "/api/routing/equalizer/\(enabled)") else {
             throw APIError.invalidURL
         }
         
@@ -109,7 +169,7 @@ class MiloAPIService {
     }
     
     func getVolumeStatus() async throws -> VolumeStatus {
-        guard let url = URL(string: "\(baseURL)/api/volume/status") else {
+        guard let url = buildURL(path: "/api/volume/status") else {
             throw APIError.invalidURL
         }
         
@@ -133,7 +193,7 @@ class MiloAPIService {
     }
     
     func setVolume(_ volume: Int) async throws {
-        guard let url = URL(string: "\(baseURL)/api/volume/set") else {
+        guard let url = buildURL(path: "/api/volume/set") else {
             throw APIError.invalidURL
         }
         
@@ -153,7 +213,7 @@ class MiloAPIService {
     }
     
     func adjustVolume(_ delta: Int) async throws {
-        guard let url = URL(string: "\(baseURL)/api/volume/adjust") else {
+        guard let url = buildURL(path: "/api/volume/adjust") else {
             throw APIError.invalidURL
         }
         

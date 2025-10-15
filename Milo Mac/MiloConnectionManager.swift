@@ -54,7 +54,6 @@ class MiloConnectionManager: NSObject {
     private func resetURLSession() {
         urlSession?.invalidateAndCancel()
         setupURLSession()
-        resolveIPv4Address()
         NSLog("🔄 URLSession reset to clear stale connections")
     }
 
@@ -214,7 +213,12 @@ class MiloConnectionManager: NSObject {
         // Reset URLSession pour éviter les connexions TCP stales
         resetURLSession()
 
-        // Connecter WebSocket
+        // Résoudre l'IP IPv4 AVANT de connecter (synchrone pour garantir qu'on a l'IP)
+        await Task.detached(priority: .userInitiated) { [weak self] in
+            self?.resolveIPv4Address()
+        }.value
+
+        // Connecter WebSocket avec l'IP résolue
         await connectWebSocket()
     }
     
@@ -279,28 +283,36 @@ class MiloConnectionManager: NSObject {
         guard let data = text.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let category = json["category"] as? String,
-              let eventType = json["type"] as? String,
-              let eventData = json["data"] as? [String: Any] else {
+              let eventType = json["type"] as? String else {
             return
         }
-        
+
+        // Ignorer les pings du serveur (keepalive)
+        if category == "system" && eventType == "ping" {
+            return
+        }
+
+        guard let eventData = json["data"] as? [String: Any] else {
+            return
+        }
+
         DispatchQueue.main.async { [weak self] in
             switch category {
             case "system":
                 if eventType == "state_changed" || eventType == "transition_complete" || eventType == "transition_start" {
                     self?.handleSystemStateChange(eventData)
                 }
-                
+
             case "volume":
                 if eventType == "volume_changed" {
                     self?.handleVolumeChange(eventData)
                 }
-                
+
             case "plugin":
                 if eventType == "state_changed" {
                     self?.handleSystemStateChange(eventData)
                 }
-                
+
             default:
                 break
             }

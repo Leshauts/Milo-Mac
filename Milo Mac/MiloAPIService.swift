@@ -37,8 +37,10 @@ class MiloAPIService {
 
         self.session = URLSession(configuration: config)
 
-        // Résoudre l'IP IPv4 au démarrage
-        resolveIPv4Address()
+        // Résoudre l'IP IPv4 en arrière-plan pour éviter les priority inversions
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            self?.resolveIPv4Address()
+        }
     }
 
     /// Recréer la session pour éviter les connexions TCP stales
@@ -54,8 +56,10 @@ class MiloAPIService {
 
         session = URLSession(configuration: config)
 
-        // Re-résoudre l'IP
-        resolveIPv4Address()
+        // Re-résoudre l'IP en arrière-plan
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            self?.resolveIPv4Address()
+        }
     }
 
     /// Résout le hostname en IPv4 et le cache
